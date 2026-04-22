@@ -50,17 +50,14 @@ const runEmailSync = async () => {
         const pdfCount = email.attachments?.filter((a) => a.readable).length || 0;
         const hasDocsend = email.deckLink && /docsend\.com/i.test(email.deckLink);
 
-        // Get viewer email from connected Gmail account
-        const { rows: tokenRows } = await pool.query(
-          'SELECT gmail_email FROM gmail_tokens ORDER BY updated_at DESC LIMIT 1'
-        );
-        const viewerEmail = tokenRows[0]?.gmail_email || 'deals@xeedvc.com';
+        // Use the @xeedvc.com team member email found in the email headers as DocSend viewer
+        const viewerEmail = email.xeedEmail || 'deals@xeedvc.com';
 
         let deal = null;
 
         // Try DocSend if there's a link and no PDF attachment
         if (hasDocsend && pdfCount === 0) {
-          console.log(`  [Cron] DocSend link found — attempting extraction: ${email.deckLink}`);
+          console.log(`  [Cron] DocSend link found — attempting extraction as ${viewerEmail}: ${email.deckLink}`);
           const slides = await extractFromDocsend(email.deckLink, viewerEmail);
           if (slides.length > 0) {
             deal = await extractDealFromImages(email.subject, email.from, slides);

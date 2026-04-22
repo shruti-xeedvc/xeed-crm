@@ -244,6 +244,10 @@ const fetchPitchEmails = async (maxResults = 50) => {
     const headerText = [from, cc, to].join(' ');
     const poc = POC_NAMES.find((n) => headerText.toLowerCase().includes(n.toLowerCase())) || null;
 
+    // Extract the @xeedvc.com email address from headers (used as DocSend viewer email)
+    const xeedEmailMatch = headerText.match(/[a-zA-Z0-9._%+-]+@xeedvc\.com/i);
+    const xeedEmail = xeedEmailMatch ? xeedEmailMatch[0].toLowerCase() : null;
+
     // Extract company website URL (any HTTP URL that isn't a known file-sharing / social domain)
     const SKIP_DOMAINS = /linkedin|twitter|facebook|instagram|google|dropbox|notion|docsend|pitch\.com|youtu|calendly|zoom|mailto|whatsapp|t\.me/i;
     const ALL_URLS = [...body.matchAll(/https?:\/\/[^\s<>"')]+/gi)].map((m) => m[0]);
@@ -295,7 +299,7 @@ const fetchPitchEmails = async (maxResults = 50) => {
       if (match) { deckLink = match[0]; break; }
     }
 
-    messages.push({ id, subject, from, body, attachments, poc, deckLink, websiteText });
+    messages.push({ id, subject, from, body, attachments, poc, deckLink, websiteText, xeedEmail });
   }
 
   return messages;
