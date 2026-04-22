@@ -142,7 +142,10 @@ const exportDealsToSheet = async () => {
     if (!d.company_name) return false;
     const company = d.company_name.trim().toLowerCase();
     const date = d.date_added ? new Date(d.date_added).toISOString().split('T')[0] : '';
-    return !existingKeys.has(`${company}|${date}`);
+    const key = `${company}|${date}`;
+    const exists = existingKeys.has(key);
+    if (!exists) console.log(`[Sheets Export] NEW → "${d.company_name}" (${date})`);
+    return !exists;
   });
 
   if (newDeals.length === 0) {

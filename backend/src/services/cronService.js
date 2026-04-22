@@ -88,7 +88,7 @@ const runEmailSync = async () => {
              (company_name, brand, founders, sector, location, funding_ask,
               stage, priority, notes, description, founder_background,
               poc, deck_link, email_source_id)
-           VALUES ($1,$2,$3,$4,$5,$6,'Sourcing','Medium',$7,$8,$9,$10,$11,$12)
+           VALUES ($1,$2,$3,$4,$5,$6,'Screening','Medium',$7,$8,$9,$10,$11,$12)
            RETURNING id`,
           [deal.company_name, deal.brand, deal.founders, deal.sector,
            deal.location, deal.funding_ask, deal.notes,

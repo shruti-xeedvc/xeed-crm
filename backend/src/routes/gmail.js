@@ -55,8 +55,14 @@ router.post('/sync', requireAuth, async (req, res) => {
 
 // POST /api/gmail/sheets-export — manual trigger
 router.post('/sheets-export', requireAuth, async (req, res) => {
-  res.json({ message: 'Sheets export started' });
-  runSheetsExport().catch((err) => console.error('Manual sheets export error:', err));
+  try {
+    const { exportDealsToSheet } = require('../services/sheetsService');
+    const added = await exportDealsToSheet();
+    res.json({ message: `Export complete — ${added} new deal(s) added to sheet`, added });
+  } catch (err) {
+    console.error('Manual sheets export error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/gmail/sheets-import — one-time historical import

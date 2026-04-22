@@ -65,7 +65,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   const {
     company_name, brand, founders = [], sector, location,
-    funding_ask, stage = 'Sourcing', priority = 'Medium',
+    funding_ask, stage = 'Screening', priority = 'Medium',
     ai_score, notes, date_added,
     description, founder_background, poc, deck_link,
   } = req.body;
