@@ -96,6 +96,23 @@ const exportDealsToSheet = async () => {
   };
   console.log('[Sheets Export] Column mapping:', COL);
 
+  // Normalize any date string to YYYY-MM-DD for reliable comparison
+  // Handles: MM/DD/YYYY, M/D/YYYY, YYYY-MM-DD, Google Sheets serials, etc.
+  const normalizeDate = (raw) => {
+    if (!raw) return '';
+    const s = String(raw).trim();
+    if (!s) return '';
+    // Google Sheets serial number
+    if (/^\d{4,5}$/.test(s)) {
+      const d = new Date((parseInt(s, 10) - 25569) * 86400 * 1000);
+      return d.toISOString().split('T')[0];
+    }
+    // Try parsing directly (handles MM/DD/YYYY, YYYY-MM-DD, etc.)
+    const d = new Date(s);
+    if (!isNaN(d)) return d.toISOString().split('T')[0];
+    return s.toLowerCase(); // fallback: keep as-is for string comparison
+  };
+
   // 2. Read all existing data rows to find companies already in the sheet
   const existingResp = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
@@ -106,11 +123,11 @@ const exportDealsToSheet = async () => {
   const companyCol = COL.company;
   const dateCol = COL.date;
 
-  // Build a set of "company|date" keys already in the sheet
+  // Build a set of "company|YYYY-MM-DD" keys already in the sheet
   const existingKeys = new Set(
     existingRows.map((r) => {
       const company = (r[companyCol] || '').trim().toLowerCase();
-      const date = (r[dateCol] || '').trim();
+      const date = normalizeDate(r[dateCol]);
       return `${company}|${date}`;
     }).filter((k) => !k.startsWith('|'))
   );
@@ -124,9 +141,7 @@ const exportDealsToSheet = async () => {
   const newDeals = deals.filter((d) => {
     if (!d.company_name) return false;
     const company = d.company_name.trim().toLowerCase();
-    const date = d.date_added
-      ? new Date(d.date_added).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
-      : '';
+    const date = d.date_added ? new Date(d.date_added).toISOString().split('T')[0] : '';
     return !existingKeys.has(`${company}|${date}`);
   });
 
