@@ -104,21 +104,31 @@ const exportDealsToSheet = async () => {
   const existingRows = existingResp.data.values || [];
 
   const companyCol = COL.company;
-  const existingCompanies = new Set(
-    existingRows
-      .map((r) => (r[companyCol] || '').trim().toLowerCase())
-      .filter(Boolean)
+  const dateCol = COL.date;
+
+  // Build a set of "company|date" keys already in the sheet
+  const existingKeys = new Set(
+    existingRows.map((r) => {
+      const company = (r[companyCol] || '').trim().toLowerCase();
+      const date = (r[dateCol] || '').trim();
+      return `${company}|${date}`;
+    }).filter((k) => !k.startsWith('|'))
   );
-  console.log(`[Sheets Export] ${existingCompanies.size} companies already in sheet`);
+  console.log(`[Sheets Export] ${existingKeys.size} company+date combos already in sheet`);
 
   // 3. Get all CRM deals and filter to only ones not already in the sheet
   const { rows: deals } = await pool.query(
     'SELECT * FROM deals ORDER BY date_added ASC NULLS LAST, created_at ASC'
   );
 
-  const newDeals = deals.filter(
-    (d) => d.company_name && !existingCompanies.has(d.company_name.trim().toLowerCase())
-  );
+  const newDeals = deals.filter((d) => {
+    if (!d.company_name) return false;
+    const company = d.company_name.trim().toLowerCase();
+    const date = d.date_added
+      ? new Date(d.date_added).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+      : '';
+    return !existingKeys.has(`${company}|${date}`);
+  });
 
   if (newDeals.length === 0) {
     console.log('[Sheets Export] No new deals to add');
