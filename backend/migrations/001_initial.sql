@@ -70,10 +70,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS deals_updated_at ON deals;
 CREATE TRIGGER deals_updated_at
   BEFORE UPDATE ON deals
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS gmail_tokens_updated_at ON gmail_tokens;
 CREATE TRIGGER gmail_tokens_updated_at
   BEFORE UPDATE ON gmail_tokens
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
