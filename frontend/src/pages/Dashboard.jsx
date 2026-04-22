@@ -8,6 +8,24 @@ import api from '../services/api';
 const STAGES = ['Screening', 'Due Diligence', 'Invested', 'Passed', 'Lost', 'On Hold'];
 const SECTORS = ['Fintech', 'SaaS', 'HealthTech', 'EdTech', 'DeepTech', 'Consumer', 'Logistics', 'CleanTech', 'Other'];
 
+const STAGE_ACCENT = {
+  Screening:       'border-cyan-500/40 text-cyan-400',
+  'Due Diligence': 'border-violet-500/40 text-violet-400',
+  Invested:        'border-emerald-500/40 text-emerald-400',
+  Passed:          'border-red-500/40 text-red-400',
+  Lost:            'border-rose-500/40 text-rose-400',
+  'On Hold':       'border-amber-500/40 text-amber-400',
+};
+
+const STAGE_ACTIVE = {
+  Screening:       'border-cyan-500 bg-cyan-500/10 ring-1 ring-cyan-500/30',
+  'Due Diligence': 'border-violet-500 bg-violet-500/10 ring-1 ring-violet-500/30',
+  Invested:        'border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500/30',
+  Passed:          'border-red-500 bg-red-500/10 ring-1 ring-red-500/30',
+  Lost:            'border-rose-500 bg-rose-500/10 ring-1 ring-rose-500/30',
+  'On Hold':       'border-amber-500 bg-amber-500/10 ring-1 ring-amber-500/30',
+};
+
 export default function Dashboard() {
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +55,6 @@ export default function Dashboard() {
     api.get('/gmail/status').then(({ data }) => setGmailStatus(data)).catch(() => {});
   }, []);
 
-  // Handle Gmail OAuth redirect result
   useEffect(() => {
     const gmailParam = searchParams.get('gmail');
     if (gmailParam === 'connected') {
@@ -112,8 +129,17 @@ export default function Dashboard() {
   }, {});
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
-      <Navbar gmailStatus={gmailStatus} onConnectGmail={connectGmail} onSync={triggerSync} onImportSheets={importFromSheets} importing={importing} onExportSheets={exportToSheets} exporting={exporting} onReauth={reauth} />
+    <div className="flex min-h-screen flex-col bg-ob-900 dot-grid">
+      <Navbar
+        gmailStatus={gmailStatus}
+        onConnectGmail={connectGmail}
+        onSync={triggerSync}
+        onImportSheets={importFromSheets}
+        importing={importing}
+        onExportSheets={exportToSheets}
+        exporting={exporting}
+        onReauth={reauth}
+      />
 
       <main className="flex-1 px-6 py-6">
         {/* Stats row */}
@@ -124,12 +150,16 @@ export default function Dashboard() {
               onClick={() => setFilters((f) => ({ ...f, stage: f.stage === s ? '' : s }))}
               className={`rounded-xl border p-4 text-left transition ${
                 filters.stage === s
-                  ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-200'
-                  : 'border-slate-200 bg-white hover:border-slate-300'
+                  ? `bg-ob-800 ${STAGE_ACTIVE[s]}`
+                  : `border-ob-600 bg-ob-800 hover:border-ob-400`
               }`}
             >
-              <div className="text-2xl font-bold text-slate-800">{stageCounts[s]}</div>
-              <div className="mt-0.5 text-xs font-medium text-slate-500">{s}</div>
+              <div className={`text-2xl font-bold ${filters.stage === s ? STAGE_ACCENT[s].split(' ')[1] : 'text-ob-50'}`}>
+                {stageCounts[s]}
+              </div>
+              <div className={`mt-0.5 text-xs font-medium ${filters.stage === s ? STAGE_ACCENT[s].split(' ')[1] : 'text-ob-400'}`}>
+                {s}
+              </div>
             </button>
           ))}
         </div>
@@ -141,12 +171,12 @@ export default function Dashboard() {
             placeholder="Search by company, founder, description…"
             value={filters.search}
             onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-            className="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            className="input-dark w-72"
           />
           <select
             value={filters.sector}
             onChange={(e) => setFilters((f) => ({ ...f, sector: e.target.value }))}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500"
+            className="select-dark w-44"
           >
             <option value="">All Sectors</option>
             {SECTORS.map((s) => <option key={s}>{s}</option>)}
@@ -154,7 +184,7 @@ export default function Dashboard() {
           {(filters.stage || filters.sector || filters.search) && (
             <button
               onClick={() => setFilters({ stage: '', sector: '', search: '' })}
-              className="text-sm text-slate-500 underline hover:text-slate-700"
+              className="text-sm text-ob-400 underline hover:text-ob-100 transition"
             >
               Clear filters
             </button>
@@ -162,7 +192,7 @@ export default function Dashboard() {
           <div className="ml-auto">
             <button
               onClick={openNew}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+              className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-ob-900 transition hover:bg-cyan-400 shadow-glow-cyan-sm"
             >
               + Add Deal
             </button>

@@ -13,12 +13,21 @@ import { Pencil, Trash2, GripVertical } from 'lucide-react';
 const STAGES = ['Screening', 'Due Diligence', 'Invested', 'Passed', 'Lost', 'On Hold'];
 
 const STAGE_HEADER = {
-  Screening: 'bg-blue-100 text-blue-700',
-  'Due Diligence': 'bg-purple-100 text-purple-700',
-  Invested: 'bg-green-100 text-green-700',
-  Passed: 'bg-red-100 text-red-600',
-  Lost: 'bg-rose-100 text-rose-700',
-  'On Hold': 'bg-amber-100 text-amber-700',
+  Screening:       'bg-cyan-500/15 text-cyan-400 border border-cyan-500/25',
+  'Due Diligence': 'bg-violet-500/15 text-violet-400 border border-violet-500/25',
+  Invested:        'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25',
+  Passed:          'bg-red-500/15 text-red-400 border border-red-500/25',
+  Lost:            'bg-rose-500/15 text-rose-400 border border-rose-500/25',
+  'On Hold':       'bg-amber-500/15 text-amber-400 border border-amber-500/25',
+};
+
+const STAGE_DROP_OVER = {
+  Screening:       'bg-cyan-500/10 ring-1 ring-cyan-500/30',
+  'Due Diligence': 'bg-violet-500/10 ring-1 ring-violet-500/30',
+  Invested:        'bg-emerald-500/10 ring-1 ring-emerald-500/30',
+  Passed:          'bg-red-500/10 ring-1 ring-red-500/30',
+  Lost:            'bg-rose-500/10 ring-1 ring-rose-500/30',
+  'On Hold':       'bg-amber-500/10 ring-1 ring-amber-500/30',
 };
 
 
@@ -36,27 +45,29 @@ function DealCard({ deal, onEdit, onDelete, isDragging = false }) {
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm transition ${
-        dragging ? 'opacity-40' : 'hover:border-slate-300 hover:shadow-md'
+      className={`group relative rounded-xl border bg-ob-800 p-3.5 transition ${
+        dragging
+          ? 'opacity-40 border-ob-600'
+          : 'border-ob-600 hover:border-ob-400 hover:shadow-md hover:shadow-black/30'
       }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <p className="truncate font-semibold text-slate-800 text-sm">{deal.company_name}</p>
+          <p className="truncate font-semibold text-ob-50 text-sm">{deal.company_name}</p>
           {deal.sector && (
-            <p className="mt-0.5 text-xs text-slate-400">{deal.sector}{deal.location ? ` · ${deal.location}` : ''}</p>
+            <p className="mt-0.5 text-xs text-ob-500">{deal.sector}{deal.location ? ` · ${deal.location}` : ''}</p>
           )}
           {deal.funding_ask && (
-            <p className="mt-1 text-xs font-medium text-slate-600">{deal.funding_ask}</p>
+            <p className="mt-1 text-xs font-medium text-ob-300">{deal.funding_ask}</p>
           )}
           {deal.founders?.length > 0 && (
-            <p className="mt-1 truncate text-xs text-slate-400">{deal.founders.slice(0, 2).join(', ')}</p>
+            <p className="mt-1 truncate text-xs text-ob-500">{deal.founders.slice(0, 2).join(', ')}</p>
           )}
         </div>
         <div
           {...listeners}
           {...attributes}
-          className="cursor-grab text-slate-300 hover:text-slate-500 flex-shrink-0"
+          className="cursor-grab text-ob-600 hover:text-ob-400 flex-shrink-0 transition"
         >
           <GripVertical size={14} />
         </div>
@@ -66,13 +77,13 @@ function DealCard({ deal, onEdit, onDelete, isDragging = false }) {
       <div className="absolute right-2 bottom-2 flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(deal); }}
-          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          className="rounded p-1 text-ob-500 hover:bg-ob-600 hover:text-ob-100 transition"
         >
           <Pencil size={11} />
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(deal.id); }}
-          className="rounded p-1 text-slate-400 hover:bg-red-100 hover:text-red-600"
+          className="rounded p-1 text-ob-500 hover:bg-red-500/10 hover:text-red-400 transition"
         >
           <Trash2 size={11} />
         </button>
@@ -88,7 +99,7 @@ function Column({ stage, deals, onEdit, onDelete }) {
     <div className="flex w-64 flex-shrink-0 flex-col">
       <div className={`mb-3 flex items-center justify-between rounded-lg px-3 py-2 ${STAGE_HEADER[stage]}`}>
         <span className="text-xs font-semibold">{stage}</span>
-        <span className="rounded-full bg-white/60 px-2 py-0.5 text-xs font-bold">
+        <span className="rounded-full bg-ob-900/60 px-2 py-0.5 text-xs font-bold text-ob-300">
           {deals.length}
         </span>
       </div>
@@ -96,7 +107,7 @@ function Column({ stage, deals, onEdit, onDelete }) {
       <div
         ref={setNodeRef}
         className={`flex flex-1 flex-col gap-2.5 rounded-xl p-2 transition min-h-[120px] ${
-          isOver ? 'bg-brand-50 ring-2 ring-brand-200' : 'bg-slate-100/60'
+          isOver ? STAGE_DROP_OVER[stage] : 'bg-ob-900/40'
         }`}
       >
         {deals.map((deal) => (
@@ -153,10 +164,10 @@ export default function KanbanBoard({ deals, onStageChange, onEdit, onDelete }) 
 
       <DragOverlay>
         {activeDeal && (
-          <div className="w-64 rounded-xl border border-brand-300 bg-white p-3.5 shadow-2xl ring-2 ring-brand-200">
-            <p className="font-semibold text-slate-800 text-sm">{activeDeal.company_name}</p>
+          <div className="w-64 rounded-xl border border-cyan-500/40 bg-ob-800 p-3.5 shadow-2xl shadow-black/50 ring-1 ring-cyan-500/20">
+            <p className="font-semibold text-ob-50 text-sm">{activeDeal.company_name}</p>
             {activeDeal.sector && (
-              <p className="mt-0.5 text-xs text-slate-400">{activeDeal.sector}</p>
+              <p className="mt-0.5 text-xs text-ob-500">{activeDeal.sector}</p>
             )}
           </div>
         )}

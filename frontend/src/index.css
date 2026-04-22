@@ -4,21 +4,55 @@
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    @apply bg-ob-900 text-ob-50 antialiased;
+  }
+  * {
+    @apply border-ob-600;
   }
 }
 
 @layer utilities {
+  /* Dot-grid background */
+  .dot-grid {
+    background-image: radial-gradient(circle, #21262d 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  /* Scrollbar */
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: #cbd5e1 transparent;
+    scrollbar-color: #30363d transparent;
   }
   .scrollbar-thin::-webkit-scrollbar {
     width: 4px;
     height: 4px;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: #30363d;
     border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: #8b949e;
+  }
+
+  /* Glow utilities */
+  .glow-cyan {
+    box-shadow: 0 0 20px rgba(34,211,238,0.25), 0 0 40px rgba(34,211,238,0.1);
+  }
+  .glow-cyan-sm {
+    box-shadow: 0 0 12px rgba(34,211,238,0.2);
+  }
+
+  /* Input dark focus ring */
+  .input-dark {
+    @apply w-full rounded-lg border border-ob-600 bg-ob-900 px-3 py-2 text-sm text-ob-50 outline-none
+           placeholder:text-ob-500 transition
+           focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20;
+  }
+
+  /* Select dark */
+  .select-dark {
+    @apply w-full rounded-lg border border-ob-600 bg-ob-900 px-3 py-2 text-sm text-ob-50 outline-none
+           transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20;
   }
 }
