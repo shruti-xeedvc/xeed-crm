@@ -48,38 +48,94 @@ const statusToStage = (status = '') => {
 
 // -------------------------------------------------------
 // EXPORT: Write all CRM deals to the Google Sheet
+// Uses the actual header row to place values in the right columns
 // -------------------------------------------------------
 const exportDealsToSheet = async () => {
   const sheets = await getSheetsClient();
+
+  // 1. Read header row so we write into the exact right columns
+  const headerResp = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: `${SHEET_NAME}!A2:Z2`,
+  });
+  const headerRow = (headerResp.data.values || [[]])[0] || [];
+  console.log('[Sheets Export] Detected headers:', headerRow);
+
+  // Build map: lowercase header → column index
+  const colIdx = {};
+  headerRow.forEach((h, i) => {
+    if (h) {
+      const lower = h.trim().toLowerCase();
+      if (colIdx[lower] === undefined) colIdx[lower] = i;
+    }
+  });
+
+  // Find the column index for a field by trying multiple name variants
+  const findCol = (...names) => {
+    for (const name of names) {
+      const lower = name.toLowerCase();
+      if (colIdx[lower] !== undefined) return colIdx[lower];
+      const key = Object.keys(colIdx).find((h) => h.includes(lower) || lower.includes(h));
+      if (key !== undefined) return colIdx[key];
+    }
+    return -1;
+  };
+
+  const totalCols = headerRow.length || 13;
+
+  // Column index for each field (falls back to -1 = skip)
+  const COL = {
+    date:        findCol('meeting date', 'date'),
+    company:     findCol('company'),
+    founderBg:   findCol('founder background', 'founder bg', 'linkedin'),
+    founders:    findCol('founders', 'founder name'),
+    sector:      findCol('sector', 'industry'),
+    round:       findCol('round', 'round size'),
+    roundSize:   findCol('round size ($mn)', 'round size', 'funding ask', 'ask'),
+    description: findCol('brief description', 'description', 'one-liner'),
+    poc:         findCol('poc', 'point of contact'),
+    status:      findCol('status', 'deal status'),
+    traction:    findCol('traction'),
+    comments:    findCol('comments', 'notes'),
+  };
+  console.log('[Sheets Export] Column mapping:', COL);
+
   const { rows: deals } = await pool.query(
     'SELECT * FROM deals ORDER BY date_added ASC NULLS LAST, created_at ASC'
   );
 
-  // Clear existing data rows (keep header)
+  // Clear existing data rows (keep header rows 1 & 2)
   await sheets.spreadsheets.values.clear({
     spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!A${DATA_START_ROW}:M`,
+    range: `${SHEET_NAME}!A${DATA_START_ROW}:Z`,
   });
 
   if (deals.length === 0) return 0;
 
-  const values = deals.map((deal) => [
-    deal.date_added
+  const values = deals.map((deal) => {
+    const row = Array(totalCols).fill('');
+
+    const set = (colKey, value) => {
+      const idx = COL[colKey];
+      if (idx >= 0 && idx < row.length) row[idx] = value ?? '';
+    };
+
+    set('date', deal.date_added
       ? new Date(deal.date_added).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
-      : '',
-    '',                                                          // B: blank column
-    deal.company_name || '',
-    deal.founder_background || '',
-    Array.isArray(deal.founders) ? deal.founders.join(', ') : '',
-    deal.sector || '',
-    stageToStatus(deal.stage),                                   // G: Round/Stage
-    deal.funding_ask || '',                                      // H: Round Size
-    deal.description || '',                                      // I: Brief Description
-    deal.poc || '',                                              // J: POC
-    stageToStatus(deal.stage),                                   // K: Status
-    '',                                                          // L: Traction (in notes)
-    deal.notes || '',                                            // M: Comments
-  ]);
+      : '');
+    set('company',     deal.company_name || '');
+    set('founderBg',   deal.founder_background || '');
+    set('founders',    Array.isArray(deal.founders) ? deal.founders.join(', ') : '');
+    set('sector',      deal.sector || '');
+    set('roundSize',   deal.funding_ask || '');
+    set('description', deal.description || '');
+    set('poc',         deal.poc || '');
+    set('status',      stageToStatus(deal.stage));
+    set('comments',    deal.notes || '');
+    // round / traction left blank — they don't map cleanly to CRM fields
+
+    return row;
+  });
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
