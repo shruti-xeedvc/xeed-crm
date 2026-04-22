@@ -1,4 +1,5 @@
 const Groq = require('groq-sdk');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -101,4 +102,70 @@ Only return valid JSON. No markdown, no explanation.`;
   };
 };
 
-module.exports = { extractDealFromEmail };
+/**
+ * Extract deal info from DocSend slide screenshots using Gemini vision.
+ * @param {string}   subject - Email subject
+ * @param {string}   from    - Sender
+ * @param {string[]} images  - Array of base64 JPEG screenshots
+ */
+const extractDealFromImages = async (subject, from, images) => {
+  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
+
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+  const imageParts = images.slice(0, 10).map((b64) => ({
+    inlineData: { mimeType: 'image/jpeg', data: b64 },
+  }));
+
+  const prompt = `You are a senior VC analyst. These are screenshots from a startup pitch deck shared via DocSend.
+
+Email subject: ${subject}
+From: ${from}
+
+Extract deal information and return ONLY a valid JSON object — no markdown, no explanation:
+{
+  "is_pitch": true,
+  "company_name": "startup name",
+  "brand": "product/brand name if different, else null",
+  "founders": ["full names from Team slide"],
+  "sector": "one of: Fintech, SaaS, HealthTech, EdTech, DeepTech, Consumer, Logistics, CleanTech, AgriTech, Other",
+  "location": "City, Country",
+  "funding_ask": "e.g. $2M — search all slides for raise/round/ask amount, null only if truly absent",
+  "description": "1–2 sentences: what the company does",
+  "founder_background": "LinkedIn URLs or: past companies, education, roles from Team slide",
+  "poc": null,
+  "notes": "2–3 sentences: key traction metrics (ARR, users, GMV, growth) and honest assessment"
+}
+
+If this is not a startup pitch, return: {"is_pitch": false}`;
+
+  const result = await model.generateContent([prompt, ...imageParts]);
+  const text = result.response.text().trim();
+
+  let data;
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    data = JSON.parse(jsonMatch ? jsonMatch[0] : text);
+  } catch {
+    console.error('[Gemini] Invalid JSON from vision:', text.slice(0, 200));
+    return null;
+  }
+
+  if (!data.is_pitch) return null;
+
+  return {
+    company_name:       data.company_name       || null,
+    brand:              data.brand              || null,
+    founders:           Array.isArray(data.founders) ? data.founders : [],
+    sector:             data.sector             || null,
+    location:           data.location           || null,
+    funding_ask:        data.funding_ask        || null,
+    description:        data.description        || null,
+    founder_background: data.founder_background || null,
+    poc:                data.poc                || null,
+    notes:              data.notes              || null,
+  };
+};
+
+module.exports = { extractDealFromEmail, extractDealFromImages };

@@ -1,7 +1,8 @@
 const cron = require('node-cron');
 const { pool } = require('../config/db');
 const { fetchPitchEmails } = require('./gmailService');
-const { extractDealFromEmail } = require('./claudeService');
+const { extractDealFromEmail, extractDealFromImages } = require('./claudeService');
+const { extractFromDocsend } = require('./docsendService');
 const { exportDealsToSheet } = require('./sheetsService');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -47,12 +48,36 @@ const runEmailSync = async () => {
 
       try {
         const pdfCount = email.attachments?.filter((a) => a.readable).length || 0;
-        if (pdfCount > 0) {
-          console.log(`  [Cron] Email has ${pdfCount} readable PDF(s) — passing to Gemini`);
-        }
-        const deal = await withRateLimit(() =>
-          extractDealFromEmail(email.subject, email.from, email.body, email.attachments || [], email.websiteText || null)
+        const hasDocsend = email.deckLink && /docsend\.com/i.test(email.deckLink);
+
+        // Get viewer email from connected Gmail account
+        const { rows: tokenRows } = await pool.query(
+          'SELECT gmail_email FROM gmail_tokens ORDER BY updated_at DESC LIMIT 1'
         );
+        const viewerEmail = tokenRows[0]?.gmail_email || 'deals@xeedvc.com';
+
+        let deal = null;
+
+        // Try DocSend if there's a link and no PDF attachment
+        if (hasDocsend && pdfCount === 0) {
+          console.log(`  [Cron] DocSend link found — attempting extraction: ${email.deckLink}`);
+          const slides = await extractFromDocsend(email.deckLink, viewerEmail);
+          if (slides.length > 0) {
+            deal = await extractDealFromImages(email.subject, email.from, slides);
+            if (deal) console.log(`  [Cron] DocSend extraction succeeded for "${deal.company_name}"`);
+          }
+          if (!deal) console.log(`  [Cron] DocSend extraction failed — falling back to email text`);
+        }
+
+        // Fall back to standard email/PDF extraction
+        if (!deal) {
+          if (pdfCount > 0) {
+            console.log(`  [Cron] Email has ${pdfCount} readable PDF(s) — passing to Groq`);
+          }
+          deal = await withRateLimit(() =>
+            extractDealFromEmail(email.subject, email.from, email.body, email.attachments || [], email.websiteText || null)
+          );
+        }
 
         if (!deal || !deal.company_name) {
           // Not a pitch email
