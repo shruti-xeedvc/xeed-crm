@@ -164,7 +164,7 @@ const exportDealsToSheet = async () => {
     spreadsheetId: SHEET_ID,
     range: `${SHEET_NAME}!A${DATA_START_ROW}`,
     valueInputOption: 'USER_ENTERED',
-    insertDataOption: 'INSERT_ROWS',
+    insertDataOption: 'OVERWRITE',
     requestBody: { values },
   });
 
