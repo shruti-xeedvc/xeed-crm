@@ -2,7 +2,7 @@
   "name": "xeed-crm",
   "version": "1.0.0",
   "scripts": {
-    "build:all": "cd frontend && npm install --include=dev && npm run build && cd ../backend && npm install",
+    "build:all": "cd frontend && npm install --include=dev && npm run build && cd ../backend && npm install && node src/migrate.js",
     "start": "cd backend && node src/index.js"
   },
   "engines": {

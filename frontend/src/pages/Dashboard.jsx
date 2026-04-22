@@ -5,7 +5,7 @@ import DealTable from '../components/DealTable';
 import DealModal from '../components/DealModal';
 import api from '../services/api';
 
-const STAGES = ['Screening', 'Due Diligence', 'Invested', 'Passed', 'Lost', 'On Hold'];
+const STAGES = ['Screening', 'Due Diligence', 'Invested', 'Passed', 'Lost', 'On Hold', 'Tracking'];
 const SECTORS = ['Fintech', 'SaaS', 'HealthTech', 'EdTech', 'DeepTech', 'Consumer', 'Logistics', 'CleanTech', 'Other'];
 
 const STAGE_ACCENT = {
@@ -15,6 +15,7 @@ const STAGE_ACCENT = {
   Passed:          'border-red-500/40 text-red-400',
   Lost:            'border-rose-500/40 text-rose-400',
   'On Hold':       'border-amber-500/40 text-amber-400',
+  Tracking:        'border-sky-500/40 text-sky-400',
 };
 
 const STAGE_ACTIVE = {
@@ -24,6 +25,7 @@ const STAGE_ACTIVE = {
   Passed:          'border-red-500 bg-red-500/10 ring-1 ring-red-500/30',
   Lost:            'border-rose-500 bg-rose-500/10 ring-1 ring-rose-500/30',
   'On Hold':       'border-amber-500 bg-amber-500/10 ring-1 ring-amber-500/30',
+  Tracking:        'border-sky-500 bg-sky-500/10 ring-1 ring-sky-500/30',
 };
 
 export default function Dashboard() {
@@ -143,7 +145,7 @@ export default function Dashboard() {
 
       <main className="flex-1 px-6 py-6">
         {/* Stats row */}
-        <div className="mb-6 grid grid-cols-3 gap-3 sm:grid-cols-6">
+        <div className="mb-6 grid grid-cols-3 gap-3 sm:grid-cols-7">
           {STAGES.map((s) => (
             <button
               key={s}

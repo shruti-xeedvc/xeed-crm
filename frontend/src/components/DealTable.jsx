@@ -9,6 +9,7 @@ const STAGE_COLORS = {
   Passed:          'bg-red-500/15 text-red-400 border border-red-500/25',
   Lost:            'bg-rose-500/15 text-rose-400 border border-rose-500/25',
   'On Hold':       'bg-amber-500/15 text-amber-400 border border-amber-500/25',
+  Tracking:        'bg-sky-500/15 text-sky-400 border border-sky-500/25',
 };
 
 const Badge = ({ label, colorClass }) => (

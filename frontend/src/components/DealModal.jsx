@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Plus, Minus } from 'lucide-react';
 
-const STAGES = ['Screening', 'Due Diligence', 'Invested', 'Passed', 'Lost', 'On Hold'];
+const STAGES = ['Screening', 'Due Diligence', 'Invested', 'Passed', 'Lost', 'On Hold', 'Tracking'];
 const PRIORITIES = ['High', 'Medium', 'Low'];
 const SECTORS = ['Fintech', 'SaaS', 'HealthTech', 'EdTech', 'DeepTech', 'Consumer', 'Logistics', 'CleanTech', 'Other'];
 
