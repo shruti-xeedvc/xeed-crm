@@ -47,13 +47,14 @@ const statusToStage = (status = '') => {
 };
 
 // -------------------------------------------------------
-// EXPORT: Write all CRM deals to the Google Sheet
-// Uses the actual header row to place values in the right columns
+// EXPORT: Append new CRM deals to the Google Sheet
+// Only adds deals that don't already exist in the sheet (by company name)
+// Never clears or overwrites existing rows
 // -------------------------------------------------------
 const exportDealsToSheet = async () => {
   const sheets = await getSheetsClient();
 
-  // 1. Read header row so we write into the exact right columns
+  // 1. Read header row to get column positions
   const headerResp = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
     range: `${SHEET_NAME}!A2:Z2`,
@@ -61,7 +62,6 @@ const exportDealsToSheet = async () => {
   const headerRow = (headerResp.data.values || [[]])[0] || [];
   console.log('[Sheets Export] Detected headers:', headerRow);
 
-  // Build map: lowercase header → column index
   const colIdx = {};
   headerRow.forEach((h, i) => {
     if (h) {
@@ -70,7 +70,6 @@ const exportDealsToSheet = async () => {
     }
   });
 
-  // Find the column index for a field by trying multiple name variants
   const findCol = (...names) => {
     for (const name of names) {
       const lower = name.toLowerCase();
@@ -83,36 +82,51 @@ const exportDealsToSheet = async () => {
 
   const totalCols = headerRow.length || 13;
 
-  // Column index for each field (falls back to -1 = skip)
   const COL = {
     date:        findCol('meeting date', 'date'),
     company:     findCol('company'),
     founderBg:   findCol('founder background', 'founder bg', 'linkedin'),
     founders:    findCol('founders', 'founder name'),
     sector:      findCol('sector', 'industry'),
-    round:       findCol('round', 'round size'),
     roundSize:   findCol('round size ($mn)', 'round size', 'funding ask', 'ask'),
     description: findCol('brief description', 'description', 'one-liner'),
     poc:         findCol('poc', 'point of contact'),
     status:      findCol('status', 'deal status'),
-    traction:    findCol('traction'),
     comments:    findCol('comments', 'notes'),
   };
   console.log('[Sheets Export] Column mapping:', COL);
 
+  // 2. Read all existing data rows to find companies already in the sheet
+  const existingResp = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: `${SHEET_NAME}!A${DATA_START_ROW}:Z`,
+  });
+  const existingRows = existingResp.data.values || [];
+
+  const companyCol = COL.company;
+  const existingCompanies = new Set(
+    existingRows
+      .map((r) => (r[companyCol] || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+  console.log(`[Sheets Export] ${existingCompanies.size} companies already in sheet`);
+
+  // 3. Get all CRM deals and filter to only ones not already in the sheet
   const { rows: deals } = await pool.query(
     'SELECT * FROM deals ORDER BY date_added ASC NULLS LAST, created_at ASC'
   );
 
-  // Clear existing data rows (keep header rows 1 & 2)
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!A${DATA_START_ROW}:Z`,
-  });
+  const newDeals = deals.filter(
+    (d) => d.company_name && !existingCompanies.has(d.company_name.trim().toLowerCase())
+  );
 
-  if (deals.length === 0) return 0;
+  if (newDeals.length === 0) {
+    console.log('[Sheets Export] No new deals to add');
+    return 0;
+  }
 
-  const values = deals.map((deal) => {
+  // 4. Append new deals after the last existing row
+  const values = newDeals.map((deal) => {
     const row = Array(totalCols).fill('');
 
     const set = (colKey, value) => {
@@ -132,20 +146,20 @@ const exportDealsToSheet = async () => {
     set('poc',         deal.poc || '');
     set('status',      stageToStatus(deal.stage));
     set('comments',    deal.notes || '');
-    // round / traction left blank — they don't map cleanly to CRM fields
 
     return row;
   });
 
-  await sheets.spreadsheets.values.update({
+  await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
     range: `${SHEET_NAME}!A${DATA_START_ROW}`,
     valueInputOption: 'USER_ENTERED',
+    insertDataOption: 'INSERT_ROWS',
     requestBody: { values },
   });
 
-  console.log(`[Sheets] Exported ${deals.length} deals to Google Sheet`);
-  return deals.length;
+  console.log(`[Sheets Export] Appended ${newDeals.length} new deals`);
+  return newDeals.length;
 };
 
 // -------------------------------------------------------
