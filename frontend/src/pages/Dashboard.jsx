@@ -5,7 +5,7 @@ import DealTable from '../components/DealTable';
 import DealModal from '../components/DealModal';
 import api from '../services/api';
 
-const STAGES = ['Sourcing', 'Screening', 'Diligence', 'Term Sheet', 'Invested', 'Passed'];
+const STAGES = ['Screening', 'Due Diligence', 'Invested', 'Passed', 'Lost', 'On Hold'];
 const SECTORS = ['Fintech', 'SaaS', 'HealthTech', 'EdTech', 'DeepTech', 'Consumer', 'Logistics', 'CleanTech', 'Other'];
 
 export default function Dashboard() {

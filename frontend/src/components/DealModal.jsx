@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Plus, Minus } from 'lucide-react';
 
-const STAGES = ['Sourcing', 'Screening', 'Diligence', 'Term Sheet', 'Invested', 'Passed'];
+const STAGES = ['Screening', 'Due Diligence', 'Invested', 'Passed', 'Lost', 'On Hold'];
 const PRIORITIES = ['High', 'Medium', 'Low'];
 const SECTORS = ['Fintech', 'SaaS', 'HealthTech', 'EdTech', 'DeepTech', 'Consumer', 'Logistics', 'CleanTech', 'Other'];
 
@@ -10,10 +10,29 @@ const POC_OPTIONS = ['', 'Anirudh', 'Shruti', 'Sailesh', 'Aditya'];
 const EMPTY = {
   company_name: '', brand: '', founders: [''],
   sector: '', location: '', funding_ask: '',
-  stage: 'Sourcing', priority: 'Medium',
+  stage: 'Screening', priority: 'Medium',
   ai_score: '', notes: '', date_added: new Date().toISOString().split('T')[0],
   description: '', founder_background: '', poc: '', deck_link: '',
 };
+
+const Field = ({ label, error, children }) => (
+  <div>
+    <label className="mb-1 block text-xs font-semibold text-slate-600">{label}</label>
+    {children}
+    {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+  </div>
+);
+
+const Input = ({ field, form, errors, set, ...props }) => (
+  <input
+    value={form[field]}
+    onChange={(e) => set(field, e.target.value)}
+    className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 ${
+      errors[field] ? 'border-red-400' : 'border-slate-200'
+    }`}
+    {...props}
+  />
+);
 
 export default function DealModal({ deal, onSave, onClose }) {
   const [form, setForm] = useState(EMPTY);
@@ -71,25 +90,6 @@ export default function DealModal({ deal, onSave, onClose }) {
     }
   };
 
-  const Field = ({ label, error, children }) => (
-    <div>
-      <label className="mb-1 block text-xs font-semibold text-slate-600">{label}</label>
-      {children}
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
-    </div>
-  );
-
-  const Input = ({ field, ...props }) => (
-    <input
-      value={form[field]}
-      onChange={(e) => set(field, e.target.value)}
-      className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100 ${
-        errors[field] ? 'border-red-400' : 'border-slate-200'
-      }`}
-      {...props}
-    />
-  );
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
@@ -110,10 +110,10 @@ export default function DealModal({ deal, onSave, onClose }) {
           {/* Row 1 */}
           <div className="grid grid-cols-2 gap-4">
             <Field label="Company Name *" error={errors.company_name}>
-              <Input field="company_name" placeholder="Acme Inc." />
+              <Input field="company_name" placeholder="Acme Inc." form={form} errors={errors} set={set} />
             </Field>
             <Field label="Brand / Product">
-              <Input field="brand" placeholder="AcmeApp" />
+              <Input field="brand" placeholder="AcmeApp" form={form} errors={errors} set={set} />
             </Field>
           </div>
 
@@ -130,14 +130,14 @@ export default function DealModal({ deal, onSave, onClose }) {
               </select>
             </Field>
             <Field label="Location">
-              <Input field="location" placeholder="Mumbai, India" />
+              <Input field="location" placeholder="Mumbai, India" form={form} errors={errors} set={set} />
             </Field>
           </div>
 
           {/* Row 3 */}
           <div className="grid grid-cols-2 gap-4">
             <Field label="Funding Ask">
-              <Input field="funding_ask" placeholder="$2M" />
+              <Input field="funding_ask" placeholder="$2M" form={form} errors={errors} set={set} />
             </Field>
             <Field label="Stage">
               <select
@@ -152,7 +152,7 @@ export default function DealModal({ deal, onSave, onClose }) {
 
           {/* Date Added */}
           <Field label="Date Added">
-            <Input field="date_added" type="date" />
+            <Input field="date_added" type="date" form={form} errors={errors} set={set} />
           </Field>
 
           {/* Founders */}
@@ -197,7 +197,7 @@ export default function DealModal({ deal, onSave, onClose }) {
           {/* Founder Background + POC */}
           <div className="grid grid-cols-2 gap-4">
             <Field label="Founder Background">
-              <Input field="founder_background" placeholder="linkedin.com/in/… or 1-line bio" />
+              <Input field="founder_background" placeholder="linkedin.com/in/… or 1-line bio" form={form} errors={errors} set={set} />
             </Field>
             <Field label="POC (Xeed Team)">
               <select
@@ -212,7 +212,7 @@ export default function DealModal({ deal, onSave, onClose }) {
 
           {/* Deck Link */}
           <Field label="Pitch Deck Link">
-            <Input field="deck_link" placeholder="https://drive.google.com/…" type="url" />
+            <Input field="deck_link" placeholder="https://drive.google.com/…" type="url" form={form} errors={errors} set={set} />
           </Field>
 
           {/* Notes */}

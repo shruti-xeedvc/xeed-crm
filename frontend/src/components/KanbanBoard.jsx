@@ -10,15 +10,15 @@ import {
 import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { Pencil, Trash2, GripVertical } from 'lucide-react';
 
-const STAGES = ['Sourcing', 'Screening', 'Diligence', 'Term Sheet', 'Invested', 'Passed'];
+const STAGES = ['Screening', 'Due Diligence', 'Invested', 'Passed', 'Lost', 'On Hold'];
 
 const STAGE_HEADER = {
-  Sourcing: 'bg-slate-100 text-slate-600',
   Screening: 'bg-blue-100 text-blue-700',
-  Diligence: 'bg-purple-100 text-purple-700',
-  'Term Sheet': 'bg-orange-100 text-orange-700',
+  'Due Diligence': 'bg-purple-100 text-purple-700',
   Invested: 'bg-green-100 text-green-700',
   Passed: 'bg-red-100 text-red-600',
+  Lost: 'bg-rose-100 text-rose-700',
+  'On Hold': 'bg-amber-100 text-amber-700',
 };
 
 
