@@ -117,6 +117,9 @@ const collectAttachments = async (gmail, messageId, payload, depth = 0) => {
   for (const part of payload.parts) {
     const { mimeType = '', filename = '', body = {} } = part;
 
+    // Debug: log every MIME part so we can diagnose missed attachments
+    console.log(`  [Attach-debug] depth=${depth} mime="${mimeType}" file="${filename}" size=${body.size} attachId=${!!body.attachmentId} inlineData=${!!body.data}`);
+
     // Treat as PDF if MIME type is application/pdf OR if filename ends with .pdf
     // (some email clients send forwarded PDFs as application/octet-stream)
     const isPdf = mimeType === PDF_MIME ||
