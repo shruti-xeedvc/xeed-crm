@@ -201,7 +201,7 @@ Read every page carefully. Extract deal information and return ONLY a valid JSON
   "founders": ["full names from Team slide"],
   "sector": "one of: Fintech, SaaS, HealthTech, EdTech, DeepTech, Consumer, Logistics, CleanTech, AgriTech, Other",
   "location": "City, Country",
-  "funding_ask": "e.g. $2M — search all pages for raise/round/ask amount, null only if truly absent",
+  "funding_ask": "Amount the startup is ACTIVELY RAISING in this round — only if the deck/email explicitly says 'raising', 'seeking', 'ask', 'round size', 'we are raising $X'. Do NOT use valuation, revenue, GMV or any other metric. Return null if no explicit fundraise amount is stated.",
   "description": "1–2 sentences: what the company does",
   "founder_background": "LinkedIn URLs or: past companies, education, roles from Team slide",
   "poc": null,
