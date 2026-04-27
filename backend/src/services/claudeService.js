@@ -48,6 +48,8 @@ const extractDealFromEmail = async (subject, from, body, attachments = [], websi
   const prompt = `Extract deal information from this pitch email${deckAttachments.length ? ', attached deck,' : ''}${websiteText ? ' and company website' : ''}.
 Return a single JSON object. If this is NOT a startup pitch or investment opportunity, return: {"is_pitch": false}
 
+IMPORTANT: Do NOT use the names of deck-hosting or file-sharing services (Papermark, DocSend, Google Drive, Dropbox, Notion, Pitch.com, etc.) as the company_name. These are just tools used to share the deck — the actual startup is different. Use the email subject or deck content to identify the real company.
+
 From: ${from}
 Subject: ${subject}${contextNote}
 
