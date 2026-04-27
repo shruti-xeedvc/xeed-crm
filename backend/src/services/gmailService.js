@@ -117,7 +117,12 @@ const collectAttachments = async (gmail, messageId, payload, depth = 0) => {
   for (const part of payload.parts) {
     const { mimeType = '', filename = '', body = {} } = part;
 
-    if (READABLE_TYPES.has(mimeType) && body.attachmentId && body.size <= MAX_ATTACHMENT_BYTES) {
+    // Treat as PDF if MIME type is application/pdf OR if filename ends with .pdf
+    // (some email clients send forwarded PDFs as application/octet-stream)
+    const isPdf = mimeType === PDF_MIME ||
+                  (filename && filename.toLowerCase().endsWith('.pdf'));
+
+    if (isPdf && body.attachmentId && (body.size == null || body.size <= MAX_ATTACHMENT_BYTES)) {
       try {
         const res = await gmail.users.messages.attachments.get({
           userId: 'me',
