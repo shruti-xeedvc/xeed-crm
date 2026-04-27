@@ -217,9 +217,10 @@ const fetchPitchEmails = async (maxResults = 500) => {
   const auth = await getAuthenticatedClient();
   const gmail = google.gmail({ version: 'v1', auth });
 
-  // Search inbox — no date filter so older emails aren't missed.
+  // Search all mail (inbox + archived, excludes spam/trash/sent).
   // processed_emails dedup prevents re-processing anything already seen.
-  const query = 'in:inbox';
+  // Avoids in:inbox which misses emails sorted into Promotions/Social tabs.
+  const query = '-in:sent -in:spam -in:trash -in:drafts';
 
   // Paginate through all results — Gmail returns at most 100 per page
   const allIds = [];
