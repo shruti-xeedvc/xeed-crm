@@ -253,14 +253,31 @@ const fetchPitchEmails = async (maxResults = 500) => {
   const messages = [];
 
   for (const { id } of allIds) {
-    // Skip already-processed
+    // Skip already-processed — but if status='added', verify the linked deal still exists.
+    // If the deal was deleted from the CRM, the processed_emails entry becomes orphaned and
+    // should be cleared so the email gets re-synced.
     const { rows } = await pool.query(
-      'SELECT id, status FROM processed_emails WHERE message_id = $1',
+      'SELECT id, status, deal_id FROM processed_emails WHERE message_id = $1',
       [id]
     );
     if (rows[0]) {
-      console.log(`[Gmail] Already processed (${rows[0].status}): ${id}`);
-      continue;
+      if (rows[0].status === 'added' && rows[0].deal_id) {
+        const { rows: dealCheck } = await pool.query(
+          'SELECT id FROM deals WHERE id = $1', [rows[0].deal_id]
+        );
+        if (!dealCheck[0]) {
+          // Deal was deleted from CRM — clear orphaned entry so this email is re-processed
+          await pool.query('DELETE FROM processed_emails WHERE message_id = $1', [id]);
+          console.log(`[Gmail] Cleared orphaned processed_emails for ${id} (deal ${rows[0].deal_id} no longer exists) — will re-process`);
+          // Fall through to reprocess this email
+        } else {
+          console.log(`[Gmail] Already processed (${rows[0].status}): ${id}`);
+          continue;
+        }
+      } else {
+        console.log(`[Gmail] Already processed (${rows[0].status}): ${id}`);
+        continue;
+      }
     }
 
     try {
