@@ -212,9 +212,9 @@ const fetchPitchEmails = async (maxResults = 500) => {
   const auth = await getAuthenticatedClient();
   const gmail = google.gmail({ version: 'v1', auth });
 
-  // Search all mail (inbox + archived) in the past 30 days.
+  // Search inbox — no date filter so older emails aren't missed.
   // processed_emails dedup prevents re-processing anything already seen.
-  const query = 'in:inbox newer_than:30d';
+  const query = 'in:inbox';
 
   // Paginate through all results — Gmail returns at most 100 per page
   const allIds = [];
