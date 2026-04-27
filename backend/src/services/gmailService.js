@@ -244,10 +244,11 @@ const fetchPitchEmails = async (maxResults = 500) => {
   for (const { id } of allIds) {
     // Skip already-processed
     const { rows } = await pool.query(
-      'SELECT id FROM processed_emails WHERE message_id = $1',
+      'SELECT id, status FROM processed_emails WHERE message_id = $1',
       [id]
     );
     if (rows[0]) {
+      console.log(`[Gmail] Already processed (${rows[0].status}): ${id}`);
       continue;
     }
 
