@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutList, Kanban, Mail, RefreshCw, LogOut, Download, Upload, ShieldCheck, Users, X, Eye, EyeOff } from 'lucide-react';
+import { LayoutList, Kanban, Mail, RefreshCw, LogOut, Download, Upload, ShieldCheck, Users, X, Eye, EyeOff, RotateCcw } from 'lucide-react';
 import api from '../services/api';
 
 function ChangePasswordModal({ onClose }) {
@@ -92,7 +92,7 @@ function ChangePasswordModal({ onClose }) {
   );
 }
 
-export default function Navbar({ gmailStatus, onConnectGmail, onSync, onImportSheets, importing, onExportSheets, exporting, onReauth }) {
+export default function Navbar({ gmailStatus, onConnectGmail, onSync, onRetrySkipped, onImportSheets, importing, onExportSheets, exporting, onReauth }) {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -139,9 +139,14 @@ export default function Navbar({ gmailStatus, onConnectGmail, onSync, onImportSh
                   <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
                   {gmailStatus.connection.gmail_email}
                 </span>
-                <button onClick={onSync} title="Sync emails now" className="rounded-lg p-1.5 text-ob-400 transition hover:bg-ob-700 hover:text-ob-50">
+                <button onClick={onSync} title="Sync new emails" className="rounded-lg p-1.5 text-ob-400 transition hover:bg-ob-700 hover:text-ob-50">
                   <RefreshCw size={14} />
                 </button>
+                {onRetrySkipped && (
+                  <button onClick={onRetrySkipped} title="Retry previously skipped emails" className="rounded-lg p-1.5 text-ob-400 transition hover:bg-ob-700 hover:text-amber-400">
+                    <RotateCcw size={14} />
+                  </button>
+                )}
                 {onImportSheets && (
                   <button
                     onClick={onImportSheets}

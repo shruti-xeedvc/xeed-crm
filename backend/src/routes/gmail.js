@@ -53,6 +53,23 @@ router.post('/sync', requireAuth, async (req, res) => {
   runEmailSync().catch((err) => console.error('Manual sync error:', err));
 });
 
+// POST /api/gmail/retry-skipped
+// Clears all 'skipped' entries from processed_emails so the next sync re-attempts them.
+// Useful when extraction logic is improved and old emails need re-processing.
+router.post('/retry-skipped', requireAuth, async (req, res) => {
+  const connection = await getConnectionStatus(req.user.id);
+  if (!connection) {
+    return res.status(400).json({ error: 'Gmail not connected.' });
+  }
+  const { rows } = await pool.query(
+    `DELETE FROM processed_emails WHERE status = 'skipped' RETURNING id`
+  );
+  const cleared = rows.length;
+  console.log(`[Retry] Cleared ${cleared} skipped emails — starting re-sync`);
+  res.json({ message: `Cleared ${cleared} skipped email(s) — re-sync started` });
+  runEmailSync().catch((err) => console.error('Retry-skipped sync error:', err));
+});
+
 // POST /api/gmail/sheets-export — manual trigger
 router.post('/sheets-export', requireAuth, async (req, res) => {
   try {

@@ -99,6 +99,15 @@ export default function Dashboard() {
     alert('Sync started — check back in a minute.');
   };
 
+  const retrySkipped = async () => {
+    try {
+      const { data } = await api.post('/gmail/retry-skipped');
+      alert(data.message);
+    } catch (err) {
+      alert('Retry failed: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
   const exportToSheets = async () => {
     setExporting(true);
     try {
@@ -136,6 +145,7 @@ export default function Dashboard() {
         gmailStatus={gmailStatus}
         onConnectGmail={connectGmail}
         onSync={triggerSync}
+        onRetrySkipped={retrySkipped}
         onImportSheets={importFromSheets}
         importing={importing}
         onExportSheets={exportToSheets}
