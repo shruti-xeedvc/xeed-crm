@@ -61,12 +61,24 @@ router.post('/retry-skipped', requireAuth, async (req, res) => {
   if (!connection) {
     return res.status(400).json({ error: 'Gmail not connected.' });
   }
-  const { rows } = await pool.query(
+
+  // Clear 'skipped' entries so they get re-attempted
+  const { rows: skipped } = await pool.query(
     `DELETE FROM processed_emails WHERE status = 'skipped' RETURNING id`
   );
-  const cleared = rows.length;
-  console.log(`[Retry] Cleared ${cleared} skipped emails — starting re-sync`);
-  res.json({ message: `Cleared ${cleared} skipped email(s) — re-sync started` });
+
+  // Also clear orphaned entries — deal was deleted from CRM but
+  // processed_emails record remained, blocking the email from re-syncing
+  const { rows: orphaned } = await pool.query(
+    `DELETE FROM processed_emails
+     WHERE deal_id IS NOT NULL
+       AND deal_id NOT IN (SELECT id FROM deals)
+     RETURNING id`
+  );
+
+  const cleared = skipped.length + orphaned.length;
+  console.log(`[Retry] Cleared ${skipped.length} skipped + ${orphaned.length} orphaned emails — starting re-sync`);
+  res.json({ message: `Cleared ${cleared} email(s) (${skipped.length} skipped, ${orphaned.length} orphaned) — re-sync started` });
   runEmailSync().catch((err) => console.error('Retry-skipped sync error:', err));
 });
 
