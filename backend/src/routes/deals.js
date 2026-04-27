@@ -127,6 +127,8 @@ router.put('/:id', async (req, res) => {
 
 // DELETE /api/deals/:id
 router.delete('/:id', async (req, res) => {
+  // Clear the processed_emails entry so the source email can be re-synced if needed
+  await pool.query('DELETE FROM processed_emails WHERE deal_id = $1', [req.params.id]);
   const { rowCount } = await pool.query('DELETE FROM deals WHERE id = $1', [req.params.id]);
   if (!rowCount) return res.status(404).json({ error: 'Deal not found' });
   res.json({ message: 'Deal deleted' });
