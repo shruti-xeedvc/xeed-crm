@@ -122,17 +122,25 @@ const collectAttachments = async (gmail, messageId, payload, depth = 0) => {
     const isPdf = mimeType === PDF_MIME ||
                   (filename && filename.toLowerCase().endsWith('.pdf'));
 
-    if (isPdf && body.attachmentId && (body.size == null || body.size <= MAX_ATTACHMENT_BYTES)) {
+    if (isPdf && (body.attachmentId || body.data) && (body.size == null || body.size <= MAX_ATTACHMENT_BYTES)) {
       try {
-        const res = await gmail.users.messages.attachments.get({
-          userId: 'me',
-          messageId,
-          id: body.attachmentId,
-        });
+        let rawBase64;
+        if (body.attachmentId) {
+          // Large attachment — fetch separately via attachments API
+          const res = await gmail.users.messages.attachments.get({
+            userId: 'me',
+            messageId,
+            id: body.attachmentId,
+          });
+          rawBase64 = res.data.data;
+        } else {
+          // Small attachment — data is inlined directly in body.data
+          rawBase64 = body.data;
+        }
 
         // Convert base64url → Buffer and extract text with pdf-parse
         const pdfBuffer = Buffer.from(
-          res.data.data.replace(/-/g, '+').replace(/_/g, '/'),
+          rawBase64.replace(/-/g, '+').replace(/_/g, '/'),
           'base64'
         );
         const parsed = await pdfParse(pdfBuffer);
