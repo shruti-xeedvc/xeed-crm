@@ -152,8 +152,8 @@ const collectAttachments = async (gmail, messageId, payload, depth = 0) => {
           readable: true,
           fileUrl,
           isImageBased,
-          // Retain buffer only for image-based PDFs so Gemini can read them directly
-          pdfBuffer: isImageBased ? pdfBuffer : null,
+          // Always retain buffer — used by Gemini PDF extraction as fallback
+          pdfBuffer,
         });
         console.log(`  [Attach] Extracted text from "${filename}" — ${parsed.numpages} pages, ${Math.round(extractedText.length / 1024)} KB text`);
       } catch (err) {

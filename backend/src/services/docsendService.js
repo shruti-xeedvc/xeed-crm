@@ -138,21 +138,25 @@ const extractFromPapermark = async (url, viewerEmail, maxSlides = 12) => {
       await emailInput.type(viewerEmail, { delay: 40 });
       await sleep(300);
 
-      // Papermark's continue button — try several selectors
+      // Papermark's continue button — try CSS selectors first, then text fallback
       const clicked = await page.evaluate(() => {
-        const selectors = [
+        const cssCandidates = [
           'button[type="submit"]',
           'input[type="submit"]',
           'button[data-testid="submit-email"]',
           'button[data-testid="continue"]',
-          // text-match fallback
-          ...Array.from(document.querySelectorAll('button')).filter(
-            (b) => /continue|submit|view|access/i.test(b.textContent)
-          ),
+          'button[data-testid="submit"]',
         ];
-        for (const el of selectors) {
+        for (const sel of cssCandidates) {
+          const el = document.querySelector(sel);
           if (el && !el.disabled) { el.click(); return true; }
         }
+        // Text-content fallback — find any button whose text looks like a submit
+        const allButtons = Array.from(document.querySelectorAll('button'));
+        const match = allButtons.find(
+          (b) => /continue|submit|view|access|proceed/i.test(b.textContent?.trim())
+        );
+        if (match && !match.disabled) { match.click(); return true; }
         return false;
       });
       if (!clicked) await page.keyboard.press('Enter');

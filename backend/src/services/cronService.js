@@ -54,7 +54,9 @@ const runEmailSync = async () => {
         const hasPapermark = email.deckLink && /papermark\.(com|io)\/view\//i.test(email.deckLink);
 
         // Image-based PDF attachments (pdf-parse returned < 300 chars of text)
+        // We also keep all PDF buffers for Groq-fallback below
         const imagePdfs = email.attachments?.filter(a => a.isImageBased && a.pdfBuffer) || [];
+        const allPdfs   = email.attachments?.filter(a => a.readable && a.pdfBuffer) || [];
 
         // Use the @xeedvc.com team member email from headers as the viewer email
         const viewerEmail = email.xeedEmail || 'deals@xeedvc.com';
@@ -99,6 +101,16 @@ const runEmailSync = async () => {
           deal = await withRateLimit(() =>
             extractDealFromEmail(email.subject, email.from, email.body, email.attachments || [], email.websiteText || null)
           );
+        }
+
+        // ── 5. Gemini PDF fallback — if Groq still failed and PDFs exist ─
+        // Catches image-based PDFs (pdfParse returned sparse text) and any
+        // deck Groq couldn't parse from the extracted text alone.
+        if (!deal && allPdfs.length > 0) {
+          console.log(`  [Cron] Groq found no deal — trying Gemini native PDF on "${allPdfs[0].filename}"`);
+          deal = await extractDealFromPdf(email.subject, email.from, allPdfs[0].pdfBuffer);
+          if (deal) console.log(`  [Cron] Gemini PDF fallback succeeded for "${deal.company_name}"`);
+          else console.log(`  [Cron] Gemini PDF fallback also returned no deal`);
         }
 
         if (!deal || !deal.company_name) {
