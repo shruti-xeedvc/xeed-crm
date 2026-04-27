@@ -213,8 +213,9 @@ const fetchPitchEmails = async (maxResults = 50) => {
   const gmail = google.gmail({ version: 'v1', auth });
 
   // Process all inbox emails — deals@xeedvc.com is a dedicated deals inbox
-  // so every email is a potential deal (no keyword filtering needed)
-  const query = 'in:inbox newer_than:8d';
+  // so every email is a potential deal (no keyword filtering needed).
+  // 30d window ensures emails aren't missed if a sync is skipped or delayed.
+  const query = 'in:inbox newer_than:30d';
 
   const listRes = await gmail.users.messages.list({
     userId: 'me',
