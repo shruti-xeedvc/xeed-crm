@@ -137,13 +137,23 @@ const collectAttachments = async (gmail, messageId, payload, depth = 0) => {
         const safeFilename = `${messageId}_${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
         const fileUrl = await uploadPdf(safeFilename, pdfBuffer);
 
+        // Flag image-based PDFs (scanned slides — pdf-parse returns no usable text)
+        // We keep the buffer so cronService can pass it to Gemini's native PDF reader
+        const isImageBased = extractedText.length < 300;
+        if (isImageBased) {
+          console.log(`  [Attach] "${filename}" is image-based (${extractedText.length} chars) — flagged for Gemini PDF extraction`);
+        }
+
         attachments.push({
           filename,
           mimeType,
           text: extractedText,
           pages: parsed.numpages,
           readable: true,
-          fileUrl,             // local URL to serve the saved PDF
+          fileUrl,
+          isImageBased,
+          // Retain buffer only for image-based PDFs so Gemini can read them directly
+          pdfBuffer: isImageBased ? pdfBuffer : null,
         });
         console.log(`  [Attach] Extracted text from "${filename}" — ${parsed.numpages} pages, ${Math.round(extractedText.length / 1024)} KB text`);
       } catch (err) {
@@ -244,12 +254,12 @@ const fetchPitchEmails = async (maxResults = 50) => {
     const headerText = [from, cc, to].join(' ');
     const poc = POC_NAMES.find((n) => headerText.toLowerCase().includes(n.toLowerCase())) || null;
 
-    // Extract the @xeedvc.com email address from headers (used as DocSend viewer email)
+    // Extract the @xeedvc.com email address from headers (used as DocSend/Papermark viewer email)
     const xeedEmailMatch = headerText.match(/[a-zA-Z0-9._%+-]+@xeedvc\.com/i);
     const xeedEmail = xeedEmailMatch ? xeedEmailMatch[0].toLowerCase() : null;
 
     // Extract company website URL (any HTTP URL that isn't a known file-sharing / social domain)
-    const SKIP_DOMAINS = /linkedin|twitter|facebook|instagram|google|dropbox|notion|docsend|pitch\.com|youtu|calendly|zoom|mailto|whatsapp|t\.me/i;
+    const SKIP_DOMAINS = /linkedin|twitter|facebook|instagram|google|dropbox|notion|docsend|papermark|pitch\.com|youtu|calendly|zoom|mailto|whatsapp|t\.me/i;
     const ALL_URLS = [...body.matchAll(/https?:\/\/[^\s<>"')]+/gi)].map((m) => m[0]);
     let websiteUrl = null;
     for (const url of ALL_URLS) {
@@ -292,6 +302,8 @@ const fetchPitchEmails = async (maxResults = 50) => {
       /https?:\/\/[^\s<>"')]*dropbox\.com\/[^\s<>"')]+/i,
       /https?:\/\/[^\s<>"')]*notion\.so\/[^\s<>"')]+/i,
       /https?:\/\/pitch\.com\/[^\s<>"')]+/i,
+      /https?:\/\/[^\s<>"')]*papermark\.com\/view\/[^\s<>"')]+/i,  // Papermark
+      /https?:\/\/[^\s<>"')]*papermark\.io\/view\/[^\s<>"')]+/i,   // Papermark (alt domain)
     ];
     let deckLink = null;
     for (const pattern of DECK_PATTERNS) {

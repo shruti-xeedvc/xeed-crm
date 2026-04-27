@@ -1,13 +1,13 @@
 const cron = require('node-cron');
 const { pool } = require('../config/db');
 const { fetchPitchEmails } = require('./gmailService');
-const { extractDealFromEmail, extractDealFromImages } = require('./claudeService');
-const { extractFromDocsend } = require('./docsendService');
+const { extractDealFromEmail, extractDealFromImages, extractDealFromPdf } = require('./claudeService');
+const { extractFromDocsend, extractFromPapermark } = require('./docsendService');
 const { exportDealsToSheet } = require('./sheetsService');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Retry a Gemini call with exponential backoff on 429
+// Retry a Groq call with exponential backoff on 429
 const withRateLimit = async (fn, retries = 3) => {
   for (let i = 0; i < retries; i++) {
     try {
@@ -43,30 +43,55 @@ const runEmailSync = async () => {
     console.log(`[Cron] Found ${emails.length} unprocessed candidate emails`);
 
     for (const [idx, email] of emails.entries()) {
-      // Always pace before calling Gemini — keeps us under 6 RPM on the free tier
+      // Pace between emails to stay under API rate limits
       if (idx > 0) await sleep(10000);
 
       try {
         const pdfCount = email.attachments?.filter((a) => a.readable).length || 0;
-        const hasDocsend = email.deckLink && /docsend\.com/i.test(email.deckLink);
 
-        // Use the @xeedvc.com team member email found in the email headers as DocSend viewer
+        // Detect deck link types
+        const hasDocsend   = email.deckLink && /docsend\.com/i.test(email.deckLink);
+        const hasPapermark = email.deckLink && /papermark\.(com|io)\/view\//i.test(email.deckLink);
+
+        // Image-based PDF attachments (pdf-parse returned < 300 chars of text)
+        const imagePdfs = email.attachments?.filter(a => a.isImageBased && a.pdfBuffer) || [];
+
+        // Use the @xeedvc.com team member email from headers as the viewer email
         const viewerEmail = email.xeedEmail || 'deals@xeedvc.com';
 
         let deal = null;
 
-        // Try DocSend if there's a link and no PDF attachment
-        if (hasDocsend && pdfCount === 0) {
+        // ── 1. DocSend link (no PDF attached) ───────────────────
+        if (!deal && hasDocsend && pdfCount === 0) {
           console.log(`  [Cron] DocSend link found — attempting extraction as ${viewerEmail}: ${email.deckLink}`);
           const slides = await extractFromDocsend(email.deckLink, viewerEmail);
           if (slides.length > 0) {
             deal = await extractDealFromImages(email.subject, email.from, slides);
             if (deal) console.log(`  [Cron] DocSend extraction succeeded for "${deal.company_name}"`);
           }
-          if (!deal) console.log(`  [Cron] DocSend extraction failed — falling back to email text`);
+          if (!deal) console.log(`  [Cron] DocSend extraction failed — trying other methods`);
         }
 
-        // Fall back to standard email/PDF extraction
+        // ── 2. Papermark link (no PDF attached) ─────────────────
+        if (!deal && hasPapermark && pdfCount === 0) {
+          console.log(`  [Cron] Papermark link found — attempting extraction as ${viewerEmail}: ${email.deckLink}`);
+          const slides = await extractFromPapermark(email.deckLink, viewerEmail);
+          if (slides.length > 0) {
+            deal = await extractDealFromImages(email.subject, email.from, slides);
+            if (deal) console.log(`  [Cron] Papermark extraction succeeded for "${deal.company_name}"`);
+          }
+          if (!deal) console.log(`  [Cron] Papermark extraction failed — trying other methods`);
+        }
+
+        // ── 3. Image-based PDF → Gemini native PDF reader ───────
+        if (!deal && imagePdfs.length > 0) {
+          console.log(`  [Cron] Image-based PDF detected in "${imagePdfs[0].filename}" — using Gemini PDF extraction`);
+          deal = await extractDealFromPdf(email.subject, email.from, imagePdfs[0].pdfBuffer);
+          if (deal) console.log(`  [Cron] Gemini PDF extraction succeeded for "${deal.company_name}"`);
+          else console.log(`  [Cron] Gemini PDF extraction returned no deal — falling back to email text`);
+        }
+
+        // ── 4. Standard text extraction via Groq ────────────────
         if (!deal) {
           if (pdfCount > 0) {
             console.log(`  [Cron] Email has ${pdfCount} readable PDF(s) — passing to Groq`);
@@ -130,8 +155,7 @@ const runEmailSync = async () => {
         console.log(`[Cron] Added deal: ${deal.company_name}`);
       } catch (emailErr) {
         console.error(`[Cron] Error processing email ${email.id}:`, emailErr.message);
-        // Don't mark as processed — leave it out of processed_emails so the
-        // next sync will pick it up and retry rather than skipping it forever.
+        // Don't mark as processed — next sync will retry
       }
     }
 
