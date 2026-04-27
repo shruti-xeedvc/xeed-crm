@@ -208,112 +208,128 @@ const extractBody = (payload) => {
 // ------------------------------------------------------------
 // Main fetch function — returns emails with attachments
 // ------------------------------------------------------------
-const fetchPitchEmails = async (maxResults = 50) => {
+const fetchPitchEmails = async (maxResults = 500) => {
   const auth = await getAuthenticatedClient();
   const gmail = google.gmail({ version: 'v1', auth });
 
-  // Search all mail (not just inbox) so archived/labelled emails are included.
-  // deals@xeedvc.com is a dedicated deals address so all mail is a potential pitch.
+  // Search all mail (inbox + archived) in the past 30 days.
   // processed_emails dedup prevents re-processing anything already seen.
-  // Exclude spam and trash only.
-  const query = 'newer_than:30d -in:spam -in:trash';
+  const query = 'in:inbox newer_than:30d';
 
-  const listRes = await gmail.users.messages.list({
-    userId: 'me',
-    q: query,
-    maxResults,
-  });
+  // Paginate through all results — Gmail returns at most 100 per page
+  const allIds = [];
+  let pageToken;
+  do {
+    const listRes = await gmail.users.messages.list({
+      userId: 'me',
+      q: query,
+      maxResults: 100,
+      ...(pageToken && { pageToken }),
+    });
+    if (listRes.data.messages) allIds.push(...listRes.data.messages);
+    pageToken = listRes.data.nextPageToken;
+  } while (pageToken && allIds.length < maxResults);
 
-  if (!listRes.data.messages) return [];
+  if (!allIds.length) return [];
+  console.log(`[Gmail] Query returned ${allIds.length} total messages (inbox, 30d)`);
 
   const messages = [];
 
-  for (const { id } of listRes.data.messages) {
+  for (const { id } of allIds) {
     // Skip already-processed
     const { rows } = await pool.query(
       'SELECT id FROM processed_emails WHERE message_id = $1',
       [id]
     );
-    if (rows[0]) continue;
-
-    const msg = await gmail.users.messages.get({
-      userId: 'me',
-      id,
-      format: 'full',
-    });
-
-    const headers = msg.data.payload.headers;
-    const subject = headers.find((h) => h.name === 'Subject')?.value || '';
-    const from    = headers.find((h) => h.name === 'From')?.value    || '';
-    const cc      = headers.find((h) => h.name === 'Cc')?.value      || '';
-    const to      = headers.find((h) => h.name === 'To')?.value      || '';
-
-    const body        = extractBody(msg.data.payload);
-    const attachments = await collectAttachments(gmail, id, msg.data.payload);
-
-    // Extract POC — check all headers for known team member names
-    const POC_NAMES = ['Anirudh', 'Shruti', 'Sailesh', 'Aditya'];
-    const headerText = [from, cc, to].join(' ');
-    const poc = POC_NAMES.find((n) => headerText.toLowerCase().includes(n.toLowerCase())) || null;
-
-    // Extract the @xeedvc.com email address from headers (used as DocSend/Papermark viewer email)
-    const xeedEmailMatch = headerText.match(/[a-zA-Z0-9._%+-]+@xeedvc\.com/i);
-    const xeedEmail = xeedEmailMatch ? xeedEmailMatch[0].toLowerCase() : null;
-
-    // Extract company website URL (any HTTP URL that isn't a known file-sharing / social domain)
-    const SKIP_DOMAINS = /linkedin|twitter|facebook|instagram|google|dropbox|notion|docsend|papermark|pitch\.com|youtu|calendly|zoom|mailto|whatsapp|t\.me/i;
-    const ALL_URLS = [...body.matchAll(/https?:\/\/[^\s<>"')]+/gi)].map((m) => m[0]);
-    let websiteUrl = null;
-    for (const url of ALL_URLS) {
-      try {
-        const host = new URL(url).hostname;
-        if (!SKIP_DOMAINS.test(host)) { websiteUrl = url; break; }
-      } catch { /* invalid URL */ }
+    if (rows[0]) {
+      continue;
     }
 
-    // Fetch and extract visible text from company website
-    let websiteText = null;
-    if (websiteUrl) {
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 6000);
-        const resp = await fetch(websiteUrl, {
-          signal: controller.signal,
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; XeedCRM/1.0)' },
-        });
-        clearTimeout(timer);
-        const html = await resp.text();
-        websiteText = html
-          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-          .replace(/<[^>]+>/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .slice(0, 4000);
-        console.log(`  [Web] Scraped ${websiteUrl} — ${Math.round(websiteText.length / 1024)} KB text`);
-      } catch (err) {
-        console.log(`  [Web] Could not scrape ${websiteUrl}: ${err.message}`);
+    try {
+      const msg = await gmail.users.messages.get({
+        userId: 'me',
+        id,
+        format: 'full',
+      });
+
+      const headers = msg.data.payload.headers;
+      const subject = headers.find((h) => h.name === 'Subject')?.value || '';
+      const from    = headers.find((h) => h.name === 'From')?.value    || '';
+      const cc      = headers.find((h) => h.name === 'Cc')?.value      || '';
+      const to      = headers.find((h) => h.name === 'To')?.value      || '';
+
+      console.log(`[Gmail] Fetching unprocessed: "${subject}" from ${from}`);
+
+      const body        = extractBody(msg.data.payload);
+      const attachments = await collectAttachments(gmail, id, msg.data.payload);
+
+      // Extract POC — check all headers for known team member names
+      const POC_NAMES = ['Anirudh', 'Shruti', 'Sailesh', 'Aditya'];
+      const headerText = [from, cc, to].join(' ');
+      const poc = POC_NAMES.find((n) => headerText.toLowerCase().includes(n.toLowerCase())) || null;
+
+      // Extract the @xeedvc.com email address from headers (used as DocSend/Papermark viewer email)
+      const xeedEmailMatch = headerText.match(/[a-zA-Z0-9._%+-]+@xeedvc\.com/i);
+      const xeedEmail = xeedEmailMatch ? xeedEmailMatch[0].toLowerCase() : null;
+
+      // Extract company website URL (any HTTP URL that isn't a known file-sharing / social domain)
+      const SKIP_DOMAINS = /linkedin|twitter|facebook|instagram|google|dropbox|notion|docsend|papermark|pitch\.com|youtu|calendly|zoom|mailto|whatsapp|t\.me/i;
+      const ALL_URLS = [...body.matchAll(/https?:\/\/[^\s<>"')]+/gi)].map((m) => m[0]);
+      let websiteUrl = null;
+      for (const url of ALL_URLS) {
+        try {
+          const host = new URL(url).hostname;
+          if (!SKIP_DOMAINS.test(host)) { websiteUrl = url; break; }
+        } catch { /* invalid URL */ }
       }
-    }
 
-    // Extract first deck URL from email body
-    const DECK_PATTERNS = [
-      /https?:\/\/docs\.google\.com\/presentation\/[^\s<>"')]+/i,
-      /https?:\/\/drive\.google\.com\/[^\s<>"')]+/i,
-      /https?:\/\/[^\s<>"')]*docsend\.com\/[^\s<>"')]+/i,
-      /https?:\/\/[^\s<>"')]*dropbox\.com\/[^\s<>"')]+/i,
-      /https?:\/\/[^\s<>"')]*notion\.so\/[^\s<>"')]+/i,
-      /https?:\/\/pitch\.com\/[^\s<>"')]+/i,
-      /https?:\/\/[^\s<>"')]*papermark\.com\/view\/[^\s<>"')]+/i,  // Papermark
-      /https?:\/\/[^\s<>"')]*papermark\.io\/view\/[^\s<>"')]+/i,   // Papermark (alt domain)
-    ];
-    let deckLink = null;
-    for (const pattern of DECK_PATTERNS) {
-      const match = body.match(pattern);
-      if (match) { deckLink = match[0]; break; }
-    }
+      // Fetch and extract visible text from company website
+      let websiteText = null;
+      if (websiteUrl) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 6000);
+          const resp = await fetch(websiteUrl, {
+            signal: controller.signal,
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; XeedCRM/1.0)' },
+          });
+          clearTimeout(timer);
+          const html = await resp.text();
+          websiteText = html
+            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 4000);
+          console.log(`  [Web] Scraped ${websiteUrl} — ${Math.round(websiteText.length / 1024)} KB text`);
+        } catch (err) {
+          console.log(`  [Web] Could not scrape ${websiteUrl}: ${err.message}`);
+        }
+      }
 
-    messages.push({ id, subject, from, body, attachments, poc, deckLink, websiteText, xeedEmail });
+      // Extract first deck URL from email body
+      const DECK_PATTERNS = [
+        /https?:\/\/docs\.google\.com\/presentation\/[^\s<>"')]+/i,
+        /https?:\/\/drive\.google\.com\/[^\s<>"')]+/i,
+        /https?:\/\/[^\s<>"')]*docsend\.com\/[^\s<>"')]+/i,
+        /https?:\/\/[^\s<>"')]*dropbox\.com\/[^\s<>"')]+/i,
+        /https?:\/\/[^\s<>"')]*notion\.so\/[^\s<>"')]+/i,
+        /https?:\/\/pitch\.com\/[^\s<>"')]+/i,
+        /https?:\/\/[^\s<>"')]*papermark\.com\/view\/[^\s<>"')]+/i,  // Papermark
+        /https?:\/\/[^\s<>"')]*papermark\.io\/view\/[^\s<>"')]+/i,   // Papermark (alt domain)
+      ];
+      let deckLink = null;
+      for (const pattern of DECK_PATTERNS) {
+        const match = body.match(pattern);
+        if (match) { deckLink = match[0]; break; }
+      }
+
+      messages.push({ id, subject, from, body, attachments, poc, deckLink, websiteText, xeedEmail });
+    } catch (err) {
+      console.error(`[Gmail] Error fetching message ${id}: ${err.message}`);
+      // Skip this message — next sync will retry since it's not in processed_emails
+    }
   }
 
   return messages;
