@@ -1,5 +1,12 @@
 const Groq = require('groq-sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleAIFileManager } = require('@google/generative-ai/server');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+// PDFs larger than this are uploaded via the File API instead of sent inline
+const INLINE_PDF_LIMIT = 15 * 1024 * 1024; // 15 MB
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -203,15 +210,43 @@ Read every page carefully. Extract deal information and return ONLY a valid JSON
 
 If this is not a startup pitch, return: {"is_pitch": false}`;
 
-  const result = await model.generateContent([
-    {
-      inlineData: {
+  let pdfPart;
+  let uploadedFileName = null;
+
+  if (pdfBuffer.length > INLINE_PDF_LIMIT) {
+    // PDF too large for inline base64 — upload via Gemini File API
+    console.log(`  [Gemini] PDF is ${Math.round(pdfBuffer.length / 1024 / 1024)}MB — uploading via File API`);
+    const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY);
+    const tmpPath = path.join(os.tmpdir(), `xeed_pdf_${Date.now()}.pdf`);
+    try {
+      fs.writeFileSync(tmpPath, pdfBuffer);
+      const upload = await fileManager.uploadFile(tmpPath, {
         mimeType: 'application/pdf',
-        data: pdfBuffer.toString('base64'),
-      },
-    },
-    { text: prompt },
-  ]);
+        displayName: `pitch_${Date.now()}.pdf`,
+      });
+      uploadedFileName = upload.file.name;
+      pdfPart = { fileData: { mimeType: 'application/pdf', fileUri: upload.file.uri } };
+      console.log(`  [Gemini] File API upload complete: ${upload.file.uri}`);
+    } finally {
+      try { fs.unlinkSync(tmpPath); } catch {}
+    }
+  } else {
+    // Small PDF — send inline
+    pdfPart = { inlineData: { mimeType: 'application/pdf', data: pdfBuffer.toString('base64') } };
+  }
+
+  let result;
+  try {
+    result = await model.generateContent([pdfPart, { text: prompt }]);
+  } finally {
+    // Clean up uploaded file from Gemini storage
+    if (uploadedFileName) {
+      try {
+        const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY);
+        await fileManager.deleteFile(uploadedFileName);
+      } catch {}
+    }
+  }
 
   const text = result.response.text().trim();
 

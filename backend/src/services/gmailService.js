@@ -16,7 +16,7 @@ const DECK_HINTS = new Set([
   'application/msword',                                                         // .doc
 ]);
 
-const MAX_ATTACHMENT_BYTES = 14 * 1024 * 1024; // 14 MB — safe for Gemini inline (~20 MB base64 limit)
+const MAX_ATTACHMENT_BYTES = 30 * 1024 * 1024; // 30 MB — large decks supported via Gemini File API
 
 const getOAuth2Client = () =>
   new google.auth.OAuth2(
