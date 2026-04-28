@@ -121,7 +121,7 @@ const extractDealFromImages = async (subject, from, images) => {
   if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
   const imageParts = images.slice(0, 10).map((b64) => ({
     inlineData: { mimeType: 'image/jpeg', data: b64 },
@@ -188,7 +188,7 @@ const extractDealFromPdf = async (subject, from, pdfBuffer) => {
   if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
   const prompt = `You are a senior VC analyst. This is a startup pitch deck PDF sent to Xeed VC.
 

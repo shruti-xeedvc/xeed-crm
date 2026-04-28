@@ -166,9 +166,25 @@ const extractFromPapermark = async (url, viewerEmail, maxSlides = 12) => {
         return false;
       });
       if (!clicked) await page.keyboard.press('Enter');
-      await sleep(4000); // Papermark re-renders after gate
+
+      // Wait for the deck to actually load — poll until scrollHeight > viewport height
+      // (email gate page is viewport-height; deck page is much taller)
+      console.log('[Papermark] Waiting for deck to load after email gate...');
+      const viewportH = page.viewport()?.height || 900;
+      let waited = 0;
+      while (waited < 20000) {
+        await sleep(1000);
+        waited += 1000;
+        const h = await page.evaluate(() => document.documentElement.scrollHeight);
+        if (h > viewportH + 200) {
+          console.log(`[Papermark] Deck loaded — height ${h}px after ${waited}ms`);
+          break;
+        }
+        if (waited % 5000 === 0) console.log(`[Papermark] Still waiting... height=${h}px`);
+      }
     } else {
       console.log('[Papermark] No email gate detected');
+      await sleep(3000); // still wait for deck render
     }
 
     // ── Page capture ─────────────────────────────────────────────
@@ -176,9 +192,6 @@ const extractFromPapermark = async (url, viewerEmail, maxSlides = 12) => {
     // scrollable view. We take a full-page screenshot, then scroll viewport-
     // by-viewport to capture every slide without relying on next-page buttons.
     const screenshots = [];
-
-    // Wait a bit longer for the deck to fully render after the email gate
-    await sleep(3000);
 
     // Get full scrollable height
     const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
