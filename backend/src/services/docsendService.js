@@ -1,15 +1,11 @@
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const PUPPETEER_ARGS = [
-  '--no-sandbox',
-  '--disable-setuid-sandbox',
-  '--disable-dev-shm-usage',
-  '--disable-gpu',
-  '--single-process',
-  '--no-zygote',
-];
+// @sparticuz/chromium already includes all necessary sandbox/GPU args
+// We only add extras that aren't covered by chromium.args
+const EXTRA_ARGS = ['--single-process', '--no-zygote'];
 
 /**
  * Opens a DocSend link with Puppeteer, fills the email gate,
@@ -18,7 +14,12 @@ const PUPPETEER_ARGS = [
 const extractFromDocsend = async (url, viewerEmail, maxSlides = 12) => {
   let browser;
   try {
-    browser = await puppeteer.launch({ headless: 'new', args: PUPPETEER_ARGS });
+    browser = await puppeteer.launch({
+      args: [...chromium.args, ...EXTRA_ARGS],
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    });
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
@@ -118,7 +119,12 @@ const extractFromDocsend = async (url, viewerEmail, maxSlides = 12) => {
 const extractFromPapermark = async (url, viewerEmail, maxSlides = 12) => {
   let browser;
   try {
-    browser = await puppeteer.launch({ headless: 'new', args: PUPPETEER_ARGS });
+    browser = await puppeteer.launch({
+      args: [...chromium.args, ...EXTRA_ARGS],
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    });
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 900 });
