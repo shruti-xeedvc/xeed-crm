@@ -113,6 +113,30 @@ const runEmailSync = async () => {
           else console.log(`  [Cron] Gemini PDF fallback also returned no deal`);
         }
 
+        // ── 6. Team-member deck stub ─────────────────────────────────
+        // If all extraction failed but the email is FROM a @xeedvc.com team
+        // member and contains a deck link, it's almost certainly a forwarded
+        // pitch. Create a stub so it lands in the CRM for manual review.
+        if (!deal || !deal.company_name) {
+          const isFromTeam = /@xeedvc\.com/i.test(email.from);
+          if (isFromTeam && email.deckLink) {
+            const subjectName = email.subject.replace(/^(fwd?:|re:|pitch|deck)\s*/i, '').trim();
+            console.log(`  [Cron] Extraction failed but team-member pitch detected — creating stub for "${subjectName}"`);
+            deal = {
+              company_name: subjectName || 'Unknown (from deck link)',
+              brand: null,
+              founders: [],
+              sector: null,
+              location: null,
+              funding_ask: null,
+              description: null,
+              founder_background: null,
+              poc: email.poc,
+              notes: `Deck link requires manual review: ${email.deckLink}`,
+            };
+          }
+        }
+
         if (!deal || !deal.company_name) {
           // Not a pitch email
           await pool.query(

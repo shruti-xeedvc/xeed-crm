@@ -142,9 +142,15 @@ const extractFromPapermark = async (url, viewerEmail, maxSlides = 12) => {
       console.log(`[Papermark] Email gate found — entering ${viewerEmail}`);
       await emailInput.click({ clickCount: 3 });
       await emailInput.type(viewerEmail, { delay: 40 });
-      await sleep(300);
+      await sleep(500);
 
-      // Papermark's continue button — try CSS selectors first, then text fallback
+      // Log all buttons visible on the gate page for debugging
+      const buttonTexts = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('button')).map(b => b.textContent?.trim()).filter(Boolean)
+      );
+      console.log(`[Papermark] Buttons on gate page: ${JSON.stringify(buttonTexts)}`);
+
+      // Try every possible submit approach in order
       const clicked = await page.evaluate(() => {
         const cssCandidates = [
           'button[type="submit"]',
@@ -152,39 +158,45 @@ const extractFromPapermark = async (url, viewerEmail, maxSlides = 12) => {
           'button[data-testid="submit-email"]',
           'button[data-testid="continue"]',
           'button[data-testid="submit"]',
+          'form button',
         ];
         for (const sel of cssCandidates) {
           const el = document.querySelector(sel);
-          if (el && !el.disabled) { el.click(); return true; }
+          if (el) { el.click(); return `css:${sel}`; }
         }
-        // Text-content fallback — find any button whose text looks like a submit
+        // Text fallback
         const allButtons = Array.from(document.querySelectorAll('button'));
         const match = allButtons.find(
-          (b) => /continue|submit|view|access|proceed/i.test(b.textContent?.trim())
+          (b) => /continue|submit|view|access|proceed|enter|confirm/i.test(b.textContent?.trim())
         );
-        if (match && !match.disabled) { match.click(); return true; }
-        return false;
+        if (match) { match.click(); return `text:${match.textContent?.trim()}`; }
+        // Last resort: click the first button on the page
+        if (allButtons[0]) { allButtons[0].click(); return `first-button:${allButtons[0].textContent?.trim()}`; }
+        return null;
       });
-      if (!clicked) await page.keyboard.press('Enter');
+      console.log(`[Papermark] Gate submit result: ${clicked}`);
 
-      // Wait for the deck to actually load — poll until scrollHeight > viewport height
-      // (email gate page is viewport-height; deck page is much taller)
+      // Also try Enter key as backup
+      await page.keyboard.press('Enter');
+
+      // Wait for deck to load — poll for scrollHeight to grow beyond viewport
       console.log('[Papermark] Waiting for deck to load after email gate...');
-      const viewportH = page.viewport()?.height || 900;
       let waited = 0;
-      while (waited < 20000) {
+      while (waited < 25000) {
         await sleep(1000);
         waited += 1000;
         const h = await page.evaluate(() => document.documentElement.scrollHeight);
-        if (h > viewportH + 200) {
-          console.log(`[Papermark] Deck loaded — height ${h}px after ${waited}ms`);
+        const inputGone = await page.$('input[type="email"], input[name="email"]') === null;
+        if (h > 1100 || inputGone) {
+          console.log(`[Papermark] Deck loaded — height ${h}px, inputGone=${inputGone}, after ${waited}ms`);
+          await sleep(2000); // let images render
           break;
         }
         if (waited % 5000 === 0) console.log(`[Papermark] Still waiting... height=${h}px`);
       }
     } else {
       console.log('[Papermark] No email gate detected');
-      await sleep(3000); // still wait for deck render
+      await sleep(4000); // wait for deck render
     }
 
     // ── Page capture ─────────────────────────────────────────────
