@@ -172,45 +172,44 @@ const extractFromPapermark = async (url, viewerEmail, maxSlides = 12) => {
     }
 
     // ── Page capture ─────────────────────────────────────────────
-    // Papermark renders each document page as a full-width image or canvas.
-    // We scroll through the document and screenshot each visible page.
+    // Papermark renders all document pages stacked vertically in a single
+    // scrollable view. We take a full-page screenshot, then scroll viewport-
+    // by-viewport to capture every slide without relying on next-page buttons.
     const screenshots = [];
+
+    // Wait a bit longer for the deck to fully render after the email gate
+    await sleep(3000);
+
+    // Get full scrollable height
+    const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+    const viewportHeight = page.viewport()?.height || 900;
+    console.log(`[Papermark] Document height: ${pageHeight}px, viewport: ${viewportHeight}px`);
+
+    let scrollY = 0;
     let prevHash = '';
     let noChangeCount = 0;
 
-    for (let i = 0; i < maxSlides; i++) {
-      const screenshot = await page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 75 });
+    while (screenshots.length < maxSlides) {
+      await page.evaluate((y) => window.scrollTo(0, y), scrollY);
+      await sleep(800);
 
-      // Cheap hash: first 200 chars — enough to detect no change
-      const hash = screenshot.slice(0, 200);
+      const screenshot = await page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 75 });
+      const hash = screenshot.slice(0, 300);
+
       if (hash === prevHash) {
         noChangeCount++;
-        if (noChangeCount >= 2) { console.log(`[Papermark] No change after ${i + 1} pages — stopping`); break; }
+        if (noChangeCount >= 2) {
+          console.log(`[Papermark] No change after scrolling — stopping at ${screenshots.length} screenshots`);
+          break;
+        }
       } else {
         noChangeCount = 0;
         screenshots.push(screenshot);
       }
       prevHash = hash;
 
-      // Try next-page button first, then keyboard arrow
-      const advanced = await page.evaluate(() => {
-        const selectors = [
-          '[data-testid="next"]',
-          '[data-testid="next-page"]',
-          'button[aria-label*="next" i]',
-          'button[title*="next" i]',
-          '[class*="next"]:not([disabled])',
-          '[class*="Next"]:not([disabled])',
-        ];
-        for (const sel of selectors) {
-          const el = document.querySelector(sel);
-          if (el && !el.disabled) { el.click(); return true; }
-        }
-        return false;
-      });
-
-      if (!advanced) await page.keyboard.press('ArrowRight');
-      await sleep(1200);
+      scrollY += viewportHeight;
+      if (scrollY >= pageHeight) break;
     }
 
     console.log(`[Papermark] Captured ${screenshots.length} pages from ${url}`);
