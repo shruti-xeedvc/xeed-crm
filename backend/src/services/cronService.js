@@ -66,10 +66,14 @@ const runEmailSync = async () => {
         // ── 1. DocSend link (no PDF attached) ───────────────────
         if (!deal && hasDocsend && pdfCount === 0) {
           console.log(`  [Cron] DocSend link found — attempting extraction as ${viewerEmail}: ${email.deckLink}`);
-          const slides = await extractFromDocsend(email.deckLink, viewerEmail);
-          if (slides.length > 0) {
-            deal = await extractDealFromImages(email.subject, email.from, slides);
-            if (deal) console.log(`  [Cron] DocSend extraction succeeded for "${deal.company_name}"`);
+          try {
+            const slides = await extractFromDocsend(email.deckLink, viewerEmail);
+            if (slides.length > 0) {
+              deal = await extractDealFromImages(email.subject, email.from, slides);
+              if (deal) console.log(`  [Cron] DocSend extraction succeeded for "${deal.company_name}"`);
+            }
+          } catch (err) {
+            console.log(`  [Cron] DocSend extraction error (non-fatal): ${err.message}`);
           }
           if (!deal) console.log(`  [Cron] DocSend extraction failed — trying other methods`);
         }
@@ -77,10 +81,14 @@ const runEmailSync = async () => {
         // ── 2. Papermark link (no PDF attached) ─────────────────
         if (!deal && hasPapermark && pdfCount === 0) {
           console.log(`  [Cron] Papermark link found — attempting extraction as ${viewerEmail}: ${email.deckLink}`);
-          const slides = await extractFromPapermark(email.deckLink, viewerEmail);
-          if (slides.length > 0) {
-            deal = await extractDealFromImages(email.subject, email.from, slides);
-            if (deal) console.log(`  [Cron] Papermark extraction succeeded for "${deal.company_name}"`);
+          try {
+            const slides = await extractFromPapermark(email.deckLink, viewerEmail);
+            if (slides.length > 0) {
+              deal = await extractDealFromImages(email.subject, email.from, slides);
+              if (deal) console.log(`  [Cron] Papermark extraction succeeded for "${deal.company_name}"`);
+            }
+          } catch (err) {
+            console.log(`  [Cron] Papermark extraction error (non-fatal): ${err.message}`);
           }
           if (!deal) console.log(`  [Cron] Papermark extraction failed — trying other methods`);
         }
@@ -88,9 +96,13 @@ const runEmailSync = async () => {
         // ── 3. Image-based PDF → Gemini native PDF reader ───────
         if (!deal && imagePdfs.length > 0) {
           console.log(`  [Cron] Image-based PDF detected in "${imagePdfs[0].filename}" — using Gemini PDF extraction`);
-          deal = await extractDealFromPdf(email.subject, email.from, imagePdfs[0].pdfBuffer);
-          if (deal) console.log(`  [Cron] Gemini PDF extraction succeeded for "${deal.company_name}"`);
-          else console.log(`  [Cron] Gemini PDF extraction returned no deal — falling back to email text`);
+          try {
+            deal = await extractDealFromPdf(email.subject, email.from, imagePdfs[0].pdfBuffer);
+            if (deal) console.log(`  [Cron] Gemini PDF extraction succeeded for "${deal.company_name}"`);
+            else console.log(`  [Cron] Gemini PDF extraction returned no deal — falling back to email text`);
+          } catch (err) {
+            console.log(`  [Cron] Gemini PDF extraction error (non-fatal): ${err.message}`);
+          }
         }
 
         // ── 4. Standard text extraction via Groq ────────────────
@@ -104,13 +116,15 @@ const runEmailSync = async () => {
         }
 
         // ── 5. Gemini PDF fallback — if Groq still failed and PDFs exist ─
-        // Catches image-based PDFs (pdfParse returned sparse text) and any
-        // deck Groq couldn't parse from the extracted text alone.
         if (!deal && allPdfs.length > 0) {
           console.log(`  [Cron] Groq found no deal — trying Gemini native PDF on "${allPdfs[0].filename}"`);
-          deal = await extractDealFromPdf(email.subject, email.from, allPdfs[0].pdfBuffer);
-          if (deal) console.log(`  [Cron] Gemini PDF fallback succeeded for "${deal.company_name}"`);
-          else console.log(`  [Cron] Gemini PDF fallback also returned no deal`);
+          try {
+            deal = await extractDealFromPdf(email.subject, email.from, allPdfs[0].pdfBuffer);
+            if (deal) console.log(`  [Cron] Gemini PDF fallback succeeded for "${deal.company_name}"`);
+            else console.log(`  [Cron] Gemini PDF fallback also returned no deal`);
+          } catch (err) {
+            console.log(`  [Cron] Gemini PDF fallback error (non-fatal): ${err.message}`);
+          }
         }
 
         // ── 6. Team-member deck stub ─────────────────────────────────
