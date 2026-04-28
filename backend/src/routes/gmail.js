@@ -105,6 +105,18 @@ router.post('/sheets-import', requireAuth, async (req, res) => {
   }
 });
 
+// DELETE /api/gmail/processed/:messageId  — force-clear a specific processed_emails entry
+// Useful when a deal was deleted from the CRM but its processed_emails record persists,
+// permanently blocking the source email from being re-synced.
+router.delete('/processed/:messageId', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(
+    'DELETE FROM processed_emails WHERE message_id = $1 RETURNING *',
+    [req.params.messageId]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'No processed_emails entry found for that message ID' });
+  res.json({ message: 'Entry cleared — next sync will reprocess this email', entry: rows[0] });
+});
+
 // DELETE /api/gmail/disconnect
 router.delete('/disconnect', requireAuth, async (req, res) => {
   await pool.query('DELETE FROM gmail_tokens WHERE user_id = $1', [req.user.id]);
