@@ -34,9 +34,17 @@ export default function Dashboard() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState(null);
   const [gmailStatus, setGmailStatus] = useState(null);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [filters, setFilters] = useState({ stage: '', sector: '', search: '' });
+
+  // Sort state lives in the URL so all team members share the same view
+  const sortKey = searchParams.get('sort') || 'date_added';
+  const sortDir = searchParams.get('order') || 'desc';
+  const setSort = (key) => {
+    const newDir = sortKey === key ? (sortDir === 'asc' ? 'desc' : 'asc') : 'asc';
+    setSearchParams((prev) => { prev.set('sort', key); prev.set('order', newDir); return prev; });
+  };
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -217,6 +225,9 @@ export default function Dashboard() {
           loading={loading}
           onEdit={openEdit}
           onDelete={handleDelete}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={setSort}
         />
       </main>
 

@@ -100,15 +100,10 @@ function DealCard({ deal, onEdit, onDelete }) {
 }
 
 // ── Desktop table ──────────────────────────────────────────────
-export default function DealTable({ deals, loading, onEdit, onDelete }) {
-  const [sortKey, setSortKey] = useState('date_added');
-  const [sortDir, setSortDir] = useState('desc');
+export default function DealTable({ deals, loading, onEdit, onDelete, sortKey = 'date_added', sortDir = 'desc', onSort }) {
   const [expanded, setExpanded] = useState(null);
 
-  const toggleSort = (key) => {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else { setSortKey(key); setSortDir('asc'); }
-  };
+  const toggleSort = (key) => onSort?.(key);
 
   const toggleExpand = (id) => setExpanded((prev) => (prev === id ? null : id));
 
