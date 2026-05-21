@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const path = require('path');
 const { testConnection } = require('./config/db');
 const { initCronJobs } = require('./services/cronService');
 
@@ -24,15 +23,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/deals', dealRoutes);
 app.use('/api/gmail', gmailRoutes);
 
-
 app.get('/api/health', (req, res) => res.json({ status: 'ok', ts: new Date() }));
-
-// Serve built frontend (production)
-const frontendDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
-app.use(express.static(frontendDist));
-app.get('*', (req, res) => {
-  res.sendFile(path.join(frontendDist, 'index.html'));
-});
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
