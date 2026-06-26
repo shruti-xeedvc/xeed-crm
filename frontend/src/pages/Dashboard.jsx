@@ -91,6 +91,11 @@ export default function Dashboard() {
     fetchDeals();
   };
 
+  const handleStageChange = async (id, stage) => {
+    await api.put(`/deals/${id}`, { stage });
+    fetchDeals();
+  };
+
   const connectGmail = async () => {
     const { data } = await api.get('/gmail/auth-url');
     window.location.href = data.url;
@@ -225,6 +230,7 @@ export default function Dashboard() {
           loading={loading}
           onEdit={openEdit}
           onDelete={handleDelete}
+          onStageChange={handleStageChange}
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={setSort}

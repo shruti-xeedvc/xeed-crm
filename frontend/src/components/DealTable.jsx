@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Pencil, Trash2, ChevronUp, ChevronDown, ExternalLink, ChevronRight } from 'lucide-react';
 
@@ -12,18 +12,57 @@ const STAGE_COLORS = {
   Tracking:        'bg-sky-500/15 text-sky-400 border border-sky-500/25',
 };
 
+const STAGES = ['Screening', 'Due Diligence', 'Invested', 'Passed', 'Lost', 'On Hold', 'Tracking'];
+
 const Badge = ({ label, colorClass }) => (
   <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${colorClass}`}>
     {label}
   </span>
 );
 
+function StageSelector({ deal, onStageChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+        className="rounded-full focus:outline-none focus:ring-1 focus:ring-ob-500"
+        title="Change stage"
+      >
+        <Badge label={deal.stage} colorClass={STAGE_COLORS[deal.stage] || 'bg-ob-700 text-ob-300 border border-ob-600'} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-40 rounded-lg border border-ob-600 bg-ob-800 py-1 shadow-xl">
+          {STAGES.map((s) => (
+            <button
+              key={s}
+              onClick={(e) => { e.stopPropagation(); onStageChange(deal.id, s); setOpen(false); }}
+              className={`block w-full px-3 py-1.5 text-left text-xs transition hover:bg-ob-700 ${deal.stage === s ? 'font-semibold text-ob-50' : 'text-ob-400'}`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const isUrl = (str) => {
   try { return Boolean(new URL(str)); } catch { return false; }
 };
 
 // ── Mobile card ────────────────────────────────────────────────
-function DealCard({ deal, onEdit, onDelete }) {
+function DealCard({ deal, onEdit, onDelete, onStageChange }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -33,7 +72,7 @@ function DealCard({ deal, onEdit, onDelete }) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-ob-50">{deal.company_name}</span>
             {deal.brand && <span className="text-xs text-ob-500">{deal.brand}</span>}
-            <Badge label={deal.stage} colorClass={STAGE_COLORS[deal.stage] || 'bg-ob-700 text-ob-300 border border-ob-600'} />
+            <StageSelector deal={deal} onStageChange={onStageChange} />
           </div>
           {deal.founders?.length > 0 && (
             <p className="mt-1 text-sm text-ob-400 truncate">{deal.founders.join(', ')}</p>
@@ -100,7 +139,7 @@ function DealCard({ deal, onEdit, onDelete }) {
 }
 
 // ── Desktop table ──────────────────────────────────────────────
-export default function DealTable({ deals, loading, onEdit, onDelete, sortKey = 'date_added', sortDir = 'desc', onSort }) {
+export default function DealTable({ deals, loading, onEdit, onDelete, onStageChange, sortKey = 'date_added', sortDir = 'desc', onSort }) {
   const [expanded, setExpanded] = useState(null);
 
   const toggleSort = (key) => onSort?.(key);
@@ -158,7 +197,7 @@ export default function DealTable({ deals, loading, onEdit, onDelete, sortKey = 
       {/* Mobile: card list */}
       <div className="flex flex-col gap-3 md:hidden">
         {sorted.map((deal) => (
-          <DealCard key={deal.id} deal={deal} onEdit={onEdit} onDelete={onDelete} />
+          <DealCard key={deal.id} deal={deal} onEdit={onEdit} onDelete={onDelete} onStageChange={onStageChange} />
         ))}
         <p className="text-center text-xs text-ob-500">{deals.length} deal{deals.length !== 1 ? 's' : ''}</p>
       </div>
@@ -216,7 +255,7 @@ export default function DealTable({ deals, loading, onEdit, onDelete, sortKey = 
                     <td className="px-4 py-3 font-medium text-ob-100">{deal.funding_ask || '—'}</td>
                     <td className="px-4 py-3 text-ob-300">{deal.poc || '—'}</td>
                     <td className="px-4 py-3">
-                      <Badge label={deal.stage} colorClass={STAGE_COLORS[deal.stage] || 'bg-ob-700 text-ob-300 border border-ob-600'} />
+                      <StageSelector deal={deal} onStageChange={onStageChange} />
                     </td>
                     <td className="px-4 py-3 text-ob-500">
                       {deal.date_added ? format(new Date(deal.date_added), 'MMM d, yyyy') : '—'}
