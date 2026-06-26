@@ -41,7 +41,7 @@ router.get('/', async (req, res) => {
      FROM deals d
      LEFT JOIN users u ON u.id = d.created_by
      ${where}
-     ORDER BY d.${sortCol} ${sortOrder}`,
+     ORDER BY d.${sortCol} ${sortOrder}, d.id DESC`,
     params
   );
 

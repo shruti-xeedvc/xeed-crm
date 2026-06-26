@@ -184,15 +184,16 @@ const runEmailSync = async () => {
           `INSERT INTO deals
              (company_name, brand, founders, sector, location, funding_ask,
               stage, priority, notes, description, founder_background,
-              poc, deck_link, email_source_id)
-           VALUES ($1,$2,$3,$4,$5,$6,'Screening','Medium',$7,$8,$9,$10,$11,$12)
+              poc, deck_link, email_source_id, date_added)
+           VALUES ($1,$2,$3,$4,$5,$6,'Screening','Medium',$7,$8,$9,$10,$11,$12,$13)
            RETURNING id`,
           [deal.company_name, deal.brand, deal.founders, deal.sector,
            deal.location, deal.funding_ask, deal.notes,
            deal.description, deal.founder_background,
            deal.poc || email.poc,
            deal.deck_link || email.deckLink || email.attachments?.find(a => a.fileUrl)?.fileUrl || null,
-           email.id]
+           email.id,
+           email.receivedAt || new Date()]
         );
 
         await pool.query(

@@ -284,11 +284,12 @@ const fetchPitchEmails = async (maxResults = 500) => {
         format: 'full',
       });
 
-      const headers = msg.data.payload.headers;
-      const subject = headers.find((h) => h.name === 'Subject')?.value || '';
-      const from    = headers.find((h) => h.name === 'From')?.value    || '';
-      const cc      = headers.find((h) => h.name === 'Cc')?.value      || '';
-      const to      = headers.find((h) => h.name === 'To')?.value      || '';
+      const headers    = msg.data.payload.headers;
+      const subject    = headers.find((h) => h.name === 'Subject')?.value || '';
+      const from       = headers.find((h) => h.name === 'From')?.value    || '';
+      const cc         = headers.find((h) => h.name === 'Cc')?.value      || '';
+      const to         = headers.find((h) => h.name === 'To')?.value      || '';
+      const receivedAt = msg.data.internalDate ? new Date(Number(msg.data.internalDate)) : new Date();
 
       console.log(`[Gmail] Fetching unprocessed: "${subject}" from ${from}`);
 
@@ -357,7 +358,7 @@ const fetchPitchEmails = async (maxResults = 500) => {
         if (match) { deckLink = match[0]; break; }
       }
 
-      messages.push({ id, subject, from, body, attachments, poc, deckLink, websiteText, xeedEmail });
+      messages.push({ id, subject, from, body, attachments, poc, deckLink, websiteText, xeedEmail, receivedAt });
     } catch (err) {
       console.error(`[Gmail] Error fetching message ${id}: ${err.message}`);
       // Skip this message — next sync will retry since it's not in processed_emails
