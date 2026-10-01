@@ -26,6 +26,19 @@ router.get('/debug-sync', async (req, res) => {
   }
 });
 
+// POST /api/gmail/debug-fix-syncs  — clear stuck 'running' sync_log entries (temporary debug)
+router.post('/debug-fix-syncs', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE sync_log SET status='error', error_message='manually cleared stuck sync', finished_at=NOW()
+       WHERE status='running' RETURNING id`
+    );
+    res.json({ cleared: rows.length, ids: rows.map((r) => r.id) });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
 // GET /api/gmail/auth-url  — generate OAuth consent URL
 router.get('/auth-url', requireAuth, (req, res) => {
   const url = getAuthUrl(req.user.id);
