@@ -16,6 +16,15 @@ router.get('/debug-redirect', (req, res) => {
   });
 });
 
+// GET /api/gmail/debug-sync  — show last 3 sync results (temporary debug)
+router.get('/debug-sync', async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id, status, started_at, completed_at, emails_processed, deals_added, error_message
+     FROM sync_log ORDER BY started_at DESC LIMIT 3`
+  );
+  res.json(rows);
+});
+
 // GET /api/gmail/auth-url  — generate OAuth consent URL
 router.get('/auth-url', requireAuth, (req, res) => {
   const url = getAuthUrl(req.user.id);
