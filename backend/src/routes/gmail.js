@@ -9,7 +9,11 @@ const router = express.Router();
 
 // GET /api/gmail/debug-redirect  — show configured redirect URI (temporary debug)
 router.get('/debug-redirect', (req, res) => {
-  res.json({ GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || '(not set)' });
+  const clientId = process.env.GOOGLE_CLIENT_ID || '(not set)';
+  res.json({
+    GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || '(not set)',
+    GOOGLE_CLIENT_ID_prefix: clientId.substring(0, 30) + '...',
+  });
 });
 
 // GET /api/gmail/auth-url  — generate OAuth consent URL
