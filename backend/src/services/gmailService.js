@@ -225,10 +225,9 @@ const fetchPitchEmails = async (maxResults = 500) => {
   const auth = await getAuthenticatedClient();
   const gmail = google.gmail({ version: 'v1', auth });
 
-  // Search inbox — includes emails with both INBOX and SENT labels
-  // (e.g. team member emailed from the connected account to itself).
+  // Search all mail (not just inbox) so archived/filtered pitches are also picked up.
   // processed_emails dedup prevents re-processing anything already seen.
-  const query = 'in:inbox';
+  const query = 'in:anywhere -in:sent -in:drafts -in:spam -in:trash';
 
   // Paginate through all results — Gmail returns at most 100 per page
   const allIds = [];

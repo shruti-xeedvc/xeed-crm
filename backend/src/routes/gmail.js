@@ -39,6 +39,23 @@ router.post('/debug-fix-syncs', async (req, res) => {
   }
 });
 
+// GET /api/gmail/debug-processed  — show processed_emails stats (temporary debug)
+router.get('/debug-processed', async (req, res) => {
+  try {
+    const { rows: stats } = await pool.query(`
+      SELECT status, COUNT(*) AS count FROM processed_emails GROUP BY status ORDER BY count DESC
+    `);
+    const { rows: recent } = await pool.query(`
+      SELECT message_id, status, processed_at, deal_id
+      FROM processed_emails ORDER BY processed_at DESC LIMIT 10
+    `);
+    const { rows: total } = await pool.query(`SELECT COUNT(*) AS total FROM processed_emails`);
+    res.json({ total: total[0].total, byStatus: stats, recentlyProcessed: recent });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
 // GET /api/gmail/auth-url  — generate OAuth consent URL
 router.get('/auth-url', requireAuth, (req, res) => {
   const url = getAuthUrl(req.user.id);
