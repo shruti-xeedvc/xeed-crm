@@ -18,11 +18,12 @@ router.get('/debug-redirect', (req, res) => {
 
 // GET /api/gmail/debug-sync  — show last 3 sync results (temporary debug)
 router.get('/debug-sync', async (req, res) => {
-  const { rows } = await pool.query(
-    `SELECT id, status, started_at, finished_at, emails_scanned, deals_added, deals_skipped, error_message
-     FROM sync_log ORDER BY started_at DESC LIMIT 3`
-  );
-  res.json(rows);
+  try {
+    const { rows } = await pool.query(`SELECT * FROM sync_log ORDER BY started_at DESC LIMIT 3`);
+    res.json(rows);
+  } catch (err) {
+    res.json({ error: err.message });
+  }
 });
 
 // GET /api/gmail/auth-url  — generate OAuth consent URL
