@@ -225,9 +225,22 @@ const fetchPitchEmails = async (maxResults = 500) => {
   const auth = await getAuthenticatedClient();
   const gmail = google.gmail({ version: 'v1', auth });
 
+  // Find the date of the last processed email so we only scan newer messages.
+  // This avoids scanning thousands of old emails on every run.
+  const { rows: lastProcessed } = await pool.query(
+    `SELECT MAX(processed_at) AS last_at FROM processed_emails`
+  );
+  const lastDate = lastProcessed[0]?.last_at;
+  // Go back 3 extra days to catch any emails processed out of order or re-tried
+  const sinceDate = lastDate
+    ? new Date(new Date(lastDate).getTime() - 3 * 24 * 60 * 60 * 1000)
+    : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // fallback: 90 days
+  const sinceStr = `${sinceDate.getFullYear()}/${String(sinceDate.getMonth() + 1).padStart(2, '0')}/${String(sinceDate.getDate()).padStart(2, '0')}`;
+
   // Search all mail (not just inbox) so archived/filtered pitches are also picked up.
   // processed_emails dedup prevents re-processing anything already seen.
-  const query = 'in:anywhere -in:sent -in:drafts -in:spam -in:trash';
+  const query = `in:anywhere -in:sent -in:drafts -in:spam -in:trash after:${sinceStr}`;
+  console.log(`[Gmail] Searching mail with query: ${query}`);
 
   // Paginate through all results — Gmail returns at most 100 per page
   const allIds = [];
