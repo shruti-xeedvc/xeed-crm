@@ -7,60 +7,6 @@ const { importDealsFromSheet } = require('../services/sheetsService');
 
 const router = express.Router();
 
-// GET /api/gmail/debug-redirect  — show configured redirect URI (temporary debug)
-router.get('/debug-redirect', (req, res) => {
-  const clientId = process.env.GOOGLE_CLIENT_ID || '(not set)';
-  res.json({
-    GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || '(not set)',
-    GOOGLE_CLIENT_ID_prefix: clientId.substring(0, 30) + '...',
-  });
-});
-
-// GET /api/gmail/debug-sync  — show last 3 sync results (temporary debug)
-router.get('/debug-sync', async (req, res) => {
-  try {
-    const { rows } = await pool.query(`SELECT * FROM sync_log ORDER BY started_at DESC LIMIT 3`);
-    res.json(rows);
-  } catch (err) {
-    res.json({ error: err.message });
-  }
-});
-
-// POST /api/gmail/debug-fix-syncs  — clear stuck 'running' sync_log entries (temporary debug)
-router.post('/debug-fix-syncs', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `UPDATE sync_log SET status='error', error_message='manually cleared stuck sync', finished_at=NOW()
-       WHERE status='running' RETURNING id`
-    );
-    res.json({ cleared: rows.length, ids: rows.map((r) => r.id) });
-  } catch (err) {
-    res.json({ error: err.message });
-  }
-});
-
-// POST /api/gmail/debug-trigger-sync  — trigger sync without auth (temporary debug)
-router.post('/debug-trigger-sync', (req, res) => {
-  res.json({ message: 'Sync triggered' });
-  runEmailSync().catch((err) => console.error('debug-trigger-sync error:', err));
-});
-
-// GET /api/gmail/debug-processed  — show processed_emails stats (temporary debug)
-router.get('/debug-processed', async (req, res) => {
-  try {
-    const { rows: stats } = await pool.query(`
-      SELECT status, COUNT(*) AS count FROM processed_emails GROUP BY status ORDER BY count DESC
-    `);
-    const { rows: recent } = await pool.query(`
-      SELECT message_id, status, processed_at, deal_id
-      FROM processed_emails ORDER BY processed_at DESC LIMIT 10
-    `);
-    const { rows: total } = await pool.query(`SELECT COUNT(*) AS total FROM processed_emails`);
-    res.json({ total: total[0].total, byStatus: stats, recentlyProcessed: recent });
-  } catch (err) {
-    res.json({ error: err.message });
-  }
-});
 
 // GET /api/gmail/auth-url  — generate OAuth consent URL
 router.get('/auth-url', requireAuth, (req, res) => {
