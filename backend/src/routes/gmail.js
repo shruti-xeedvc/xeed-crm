@@ -39,6 +39,12 @@ router.post('/debug-fix-syncs', async (req, res) => {
   }
 });
 
+// POST /api/gmail/debug-trigger-sync  — trigger sync without auth (temporary debug)
+router.post('/debug-trigger-sync', (req, res) => {
+  res.json({ message: 'Sync triggered' });
+  runEmailSync().catch((err) => console.error('debug-trigger-sync error:', err));
+});
+
 // GET /api/gmail/debug-processed  — show processed_emails stats (temporary debug)
 router.get('/debug-processed', async (req, res) => {
   try {
