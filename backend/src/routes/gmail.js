@@ -7,6 +7,11 @@ const { importDealsFromSheet } = require('../services/sheetsService');
 
 const router = express.Router();
 
+// GET /api/gmail/debug-redirect  — show configured redirect URI (temporary debug)
+router.get('/debug-redirect', (req, res) => {
+  res.json({ GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || '(not set)' });
+});
+
 // GET /api/gmail/auth-url  — generate OAuth consent URL
 router.get('/auth-url', requireAuth, (req, res) => {
   const url = getAuthUrl(req.user.id);
