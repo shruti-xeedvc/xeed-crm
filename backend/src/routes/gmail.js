@@ -65,22 +65,33 @@ router.get('/debug-status', async (req, res) => {
   }
 });
 
-// GET /api/gmail/debug-test-groq — test Groq API connectivity (temporary)
+// GET /api/gmail/debug-test-groq — test Groq API models (temporary)
 router.get('/debug-test-groq', async (req, res) => {
-  try {
-    const Groq = require('groq-sdk');
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: 'Return {"ok": true}' }],
-      temperature: 0,
-      response_format: { type: 'json_object' },
-      max_tokens: 20,
-    });
-    res.json({ success: true, response: completion.choices[0].message.content });
-  } catch (err) {
-    res.json({ success: false, error: err.message, status: err.status || err.statusCode || null });
+  const Groq = require('groq-sdk');
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  const models = [
+    'llama-3.3-70b-versatile',
+    'llama-3.1-70b-versatile',
+    'llama3-70b-8192',
+    'llama-3.1-8b-instant',
+    'llama3-8b-8192',
+  ];
+  const results = {};
+  for (const model of models) {
+    try {
+      const c = await groq.chat.completions.create({
+        model,
+        messages: [{ role: 'user', content: 'Return {"ok": true}' }],
+        temperature: 0,
+        response_format: { type: 'json_object' },
+        max_tokens: 20,
+      });
+      results[model] = { ok: true, response: c.choices[0].message.content };
+    } catch (err) {
+      results[model] = { ok: false, error: err.message };
+    }
   }
+  res.json(results);
 });
 
 // GET /api/gmail/auth-url  — generate OAuth consent URL
