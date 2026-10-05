@@ -369,4 +369,4 @@ const fetchPitchEmails = async (maxResults = 500) => {
   return messages;
 };
 
-module.exports = { getAuthUrl, exchangeCode, getConnectionStatus, fetchPitchEmails };
+module.exports = { getAuthUrl, exchangeCode, getConnectionStatus, fetchPitchEmails, getAuthenticatedClient };

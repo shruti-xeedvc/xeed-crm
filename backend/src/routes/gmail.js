@@ -1,7 +1,7 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { requireAuth } = require('../middleware/auth');
-const { getAuthUrl, exchangeCode, getConnectionStatus } = require('../services/gmailService');
+const { getAuthUrl, exchangeCode, getConnectionStatus, getAuthenticatedClient } = require('../services/gmailService');
 const { runEmailSync, runSheetsExport } = require('../services/cronService');
 const { importDealsFromSheet } = require('../services/sheetsService');
 
@@ -16,7 +16,6 @@ router.post('/debug-trigger', (req, res) => {
 // GET /api/gmail/debug-inbox — list recent Gmail messages directly from API (temporary)
 router.get('/debug-inbox', async (req, res) => {
   try {
-    const { getAuthenticatedClient } = require('../services/gmailService');
     const { google } = require('googleapis');
     const auth = await getAuthenticatedClient();
     const gmail = google.gmail({ version: 'v1', auth });
