@@ -7,6 +7,28 @@ const { importDealsFromSheet } = require('../services/sheetsService');
 
 const router = express.Router();
 
+// GET /api/gmail/debug-status — sync health check (temporary)
+router.get('/debug-status', async (req, res) => {
+  try {
+    const { rows: syncs } = await pool.query(
+      `SELECT id, status, started_at, finished_at, emails_scanned, deals_added, deals_skipped, error_message
+       FROM sync_log ORDER BY started_at DESC LIMIT 5`
+    );
+    const { rows: stats } = await pool.query(
+      `SELECT status, COUNT(*) AS count, MAX(processed_at) AS latest FROM processed_emails GROUP BY status`
+    );
+    const { rows: recent } = await pool.query(
+      `SELECT message_id, subject, status, processed_at FROM processed_emails
+       ORDER BY processed_at DESC LIMIT 5`
+    );
+    const { rows: token } = await pool.query(
+      `SELECT gmail_email, updated_at FROM gmail_tokens ORDER BY updated_at DESC LIMIT 1`
+    );
+    res.json({ connectedAccount: token[0] || null, recentSyncs: syncs, processedStats: stats, recentProcessed: recent });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
 
 // GET /api/gmail/auth-url  — generate OAuth consent URL
 router.get('/auth-url', requireAuth, (req, res) => {
