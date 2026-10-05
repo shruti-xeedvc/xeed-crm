@@ -13,6 +13,36 @@ router.post('/debug-trigger', (req, res) => {
   runEmailSync().catch((err) => console.error('debug-trigger error:', err));
 });
 
+// GET /api/gmail/debug-inbox — list recent Gmail messages directly from API (temporary)
+router.get('/debug-inbox', async (req, res) => {
+  try {
+    const { getAuthenticatedClient } = require('../services/gmailService');
+    const { google } = require('googleapis');
+    const auth = await getAuthenticatedClient();
+    const gmail = google.gmail({ version: 'v1', auth });
+
+    const query = '-is:sent -is:draft -in:trash';
+    const listRes = await gmail.users.messages.list({ userId: 'me', q: query, maxResults: 20 });
+    const messages = listRes.data.messages || [];
+    const total = listRes.data.resultSizeEstimate;
+
+    const details = [];
+    for (const { id } of messages.slice(0, 10)) {
+      const msg = await gmail.users.messages.get({ userId: 'me', id, format: 'metadata', metadataHeaders: ['Subject', 'From', 'Date'] });
+      const headers = msg.data.payload.headers;
+      const subject = headers.find(h => h.name === 'Subject')?.value || '';
+      const from    = headers.find(h => h.name === 'From')?.value    || '';
+      const date    = headers.find(h => h.name === 'Date')?.value    || '';
+      const inProcessed = await pool.query('SELECT status FROM processed_emails WHERE message_id = $1', [id]);
+      details.push({ id, subject, from, date, alreadyProcessed: inProcessed.rows[0]?.status || null });
+    }
+
+    res.json({ totalEstimate: total, query, recentMessages: details });
+  } catch (err) {
+    res.json({ error: err.message, stack: err.stack?.split('\n').slice(0, 5) });
+  }
+});
+
 // GET /api/gmail/debug-status — sync health check (temporary)
 router.get('/debug-status', async (req, res) => {
   try {
