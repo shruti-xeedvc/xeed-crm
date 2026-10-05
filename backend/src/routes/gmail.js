@@ -65,25 +65,17 @@ router.get('/debug-status', async (req, res) => {
   }
 });
 
-// GET /api/gmail/debug-test-gemini — test Gemini models (temporary)
+// GET /api/gmail/debug-test-gemini — test Gemini connectivity (temporary)
 router.get('/debug-test-gemini', async (req, res) => {
-  const { GoogleGenerativeAI } = require('@google/generative-ai');
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const candidates = [
-    'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash',
-    'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-pro',
-  ];
-  const results = {};
-  for (const m of candidates) {
-    try {
-      const model = genAI.getGenerativeModel({ model: m });
-      const r = await model.generateContent('Return {"ok": true}');
-      results[m] = { ok: true, response: r.response.text().slice(0, 50) };
-    } catch (err) {
-      results[m] = { ok: false, error: err.message.slice(0, 100) };
-    }
+  try {
+    const { GoogleGenerativeAI } = require('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' });
+    const r = await model.generateContent('Return {"ok": true}');
+    res.json({ success: true, response: r.response.text().slice(0, 100) });
+  } catch (err) {
+    res.json({ success: false, error: err.message.slice(0, 200) });
   }
-  res.json(results);
 });
 
 // GET /api/gmail/auth-url  — generate OAuth consent URL
