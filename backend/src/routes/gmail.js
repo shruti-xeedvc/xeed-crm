@@ -7,6 +7,12 @@ const { importDealsFromSheet } = require('../services/sheetsService');
 
 const router = express.Router();
 
+// POST /api/gmail/debug-trigger — trigger sync without auth (temporary)
+router.post('/debug-trigger', (req, res) => {
+  res.json({ message: 'Sync triggered' });
+  runEmailSync().catch((err) => console.error('debug-trigger error:', err));
+});
+
 // GET /api/gmail/debug-status — sync health check (temporary)
 router.get('/debug-status', async (req, res) => {
   try {
