@@ -65,6 +65,24 @@ router.get('/debug-status', async (req, res) => {
   }
 });
 
+// GET /api/gmail/debug-test-groq — test Groq API connectivity (temporary)
+router.get('/debug-test-groq', async (req, res) => {
+  try {
+    const Groq = require('groq-sdk');
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: 'Return {"ok": true}' }],
+      temperature: 0,
+      response_format: { type: 'json_object' },
+      max_tokens: 20,
+    });
+    res.json({ success: true, response: completion.choices[0].message.content });
+  } catch (err) {
+    res.json({ success: false, error: err.message, status: err.status || err.statusCode || null });
+  }
+});
+
 // GET /api/gmail/auth-url  — generate OAuth consent URL
 router.get('/auth-url', requireAuth, (req, res) => {
   const url = getAuthUrl(req.user.id);

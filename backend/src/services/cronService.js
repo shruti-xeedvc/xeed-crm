@@ -110,9 +110,14 @@ const runEmailSync = async () => {
           if (pdfCount > 0) {
             console.log(`  [Cron] Email has ${pdfCount} readable PDF(s) — passing to Groq`);
           }
-          deal = await withRateLimit(() =>
-            extractDealFromEmail(email.subject, email.from, email.body, email.attachments || [], email.websiteText || null)
-          );
+          try {
+            deal = await withRateLimit(() =>
+              extractDealFromEmail(email.subject, email.from, email.body, email.attachments || [], email.websiteText || null)
+            );
+          } catch (groqErr) {
+            console.error(`  [Cron] Groq extraction failed (non-fatal): ${groqErr.message}`);
+            deal = null;
+          }
         }
 
         // ── 5. Gemini PDF fallback — if Groq still failed and PDFs exist ─
