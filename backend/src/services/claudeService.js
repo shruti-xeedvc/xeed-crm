@@ -7,6 +7,26 @@ const os = require('os');
 // PDFs larger than this are uploaded via the File API instead of sent inline
 const INLINE_PDF_LIMIT = 15 * 1024 * 1024; // 15 MB
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Retry Gemini calls on 503 (model temporarily overloaded)
+const geminiWithRetry = async (fn, retries = 4) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const is503 = err.message?.includes('[503') || err.status === 503;
+      if (is503 && i < retries - 1) {
+        const wait = (i + 1) * 8000; // 8s, 16s, 24s
+        console.log(`  [Gemini] 503 overloaded — retrying in ${wait / 1000}s (attempt ${i + 2}/${retries})`);
+        await sleep(wait);
+      } else {
+        throw err;
+      }
+    }
+  }
+};
+
 const SYSTEM_PROMPT = `You are a senior VC analyst at Xeed VC. Your job is to extract structured deal information from pitch emails, attached pitch decks, and company website text sent by founders.
 
 Guidelines:
@@ -81,7 +101,7 @@ Only return valid JSON. No markdown, no explanation.`;
     generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
   });
 
-  const result = await model.generateContent(prompt);
+  const result = await geminiWithRetry(() => model.generateContent(prompt));
   const text = result.response.text().trim();
 
   let data;
@@ -147,7 +167,7 @@ Extract deal information and return ONLY a valid JSON object — no markdown, no
 
 If this is not a startup pitch, return: {"is_pitch": false}`;
 
-  const result = await model.generateContent([prompt, ...imageParts]);
+  const result = await geminiWithRetry(() => model.generateContent([prompt, ...imageParts]));
   const text = result.response.text().trim();
 
   let data;
@@ -237,7 +257,7 @@ If this is not a startup pitch, return: {"is_pitch": false}`;
 
   let result;
   try {
-    result = await model.generateContent([pdfPart, { text: prompt }]);
+    result = await geminiWithRetry(() => model.generateContent([pdfPart, { text: prompt }]));
   } finally {
     // Clean up uploaded file from Gemini storage
     if (uploadedFileName) {
