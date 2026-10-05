@@ -65,33 +65,16 @@ router.get('/debug-status', async (req, res) => {
   }
 });
 
-// GET /api/gmail/debug-test-gemini — list available Gemini models and test top ones (temporary)
+// GET /api/gmail/debug-test-gemini — test Gemini connectivity with gemini-flash-latest (temporary)
 router.get('/debug-test-gemini', async (req, res) => {
   try {
-    const key = process.env.GEMINI_API_KEY;
-    // List models via REST
-    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
-    const listData = await listRes.json();
-    const models = (listData.models || [])
-      .map(m => m.name.replace('models/', ''))
-      .filter(m => m.includes('flash') || m.includes('pro'));
-
-    // Test first few
     const { GoogleGenerativeAI } = require('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI(key);
-    const tests = {};
-    for (const m of models.slice(0, 5)) {
-      try {
-        const model = genAI.getGenerativeModel({ model: m });
-        const r = await model.generateContent('Return {"ok": true}');
-        tests[m] = { ok: true, response: r.response.text().slice(0, 50) };
-      } catch (err) {
-        tests[m] = { ok: false, error: err.message.slice(0, 150) };
-      }
-    }
-    res.json({ availableModels: models, tests });
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
+    const r = await model.generateContent('Return {"ok": true}');
+    res.json({ success: true, model: 'gemini-flash-latest', response: r.response.text().slice(0, 100) });
   } catch (err) {
-    res.json({ error: err.message });
+    res.json({ success: false, error: err.message.slice(0, 300) });
   }
 });
 
