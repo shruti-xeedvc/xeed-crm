@@ -65,33 +65,34 @@ router.get('/debug-status', async (req, res) => {
   }
 });
 
-// GET /api/gmail/debug-test-groq — test Groq API models (temporary)
+// GET /api/gmail/debug-test-groq — list available Groq models and test one (temporary)
 router.get('/debug-test-groq', async (req, res) => {
-  const Groq = require('groq-sdk');
-  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-  const models = [
-    'llama-3.3-70b-versatile',
-    'llama-3.1-70b-versatile',
-    'llama3-70b-8192',
-    'llama-3.1-8b-instant',
-    'llama3-8b-8192',
-  ];
-  const results = {};
-  for (const model of models) {
-    try {
-      const c = await groq.chat.completions.create({
-        model,
-        messages: [{ role: 'user', content: 'Return {"ok": true}' }],
-        temperature: 0,
-        response_format: { type: 'json_object' },
-        max_tokens: 20,
-      });
-      results[model] = { ok: true, response: c.choices[0].message.content };
-    } catch (err) {
-      results[model] = { ok: false, error: err.message };
+  try {
+    const Groq = require('groq-sdk');
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    const modelList = await groq.models.list();
+    const models = modelList.data?.map(m => m.id) || [];
+    // Try the first model that supports chat
+    let testResult = null;
+    for (const modelId of models.slice(0, 3)) {
+      try {
+        const c = await groq.chat.completions.create({
+          model: modelId,
+          messages: [{ role: 'user', content: 'Return {"ok": true}' }],
+          temperature: 0,
+          response_format: { type: 'json_object' },
+          max_tokens: 20,
+        });
+        testResult = { model: modelId, response: c.choices[0].message.content };
+        break;
+      } catch (err) {
+        // try next
+      }
     }
+    res.json({ availableModels: models, testResult });
+  } catch (err) {
+    res.json({ error: err.message, status: err.status });
   }
-  res.json(results);
 });
 
 // GET /api/gmail/auth-url  — generate OAuth consent URL
