@@ -13,6 +13,23 @@ router.post('/debug-trigger', (req, res) => {
   runEmailSync().catch((err) => console.error('debug-trigger error:', err));
 });
 
+// POST /api/gmail/debug-clear-messages — clear specific processed_emails entries (temporary)
+router.post('/debug-clear-messages', async (req, res) => {
+  const { messageIds } = req.body;
+  if (!Array.isArray(messageIds) || messageIds.length === 0) {
+    return res.status(400).json({ error: 'messageIds array required' });
+  }
+  try {
+    const { rows } = await pool.query(
+      'DELETE FROM processed_emails WHERE message_id = ANY($1) RETURNING message_id, subject, status',
+      [messageIds]
+    );
+    res.json({ cleared: rows });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
 // GET /api/gmail/debug-inbox — list recent Gmail messages directly from API (temporary)
 router.get('/debug-inbox', async (req, res) => {
   try {

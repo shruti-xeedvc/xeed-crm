@@ -25,8 +25,8 @@ const runEmailSync = async () => {
     console.log(`[Cron] Found ${emails.length} unprocessed candidate emails`);
 
     for (const [idx, email] of emails.entries()) {
-      // Pace between emails to stay under API rate limits
-      if (idx > 0) await sleep(10000);
+      // Brief pause between emails (Gemini has much higher rate limits than the old Groq setup)
+      if (idx > 0) await sleep(2000);
 
       try {
         const pdfCount = email.attachments?.filter((a) => a.readable).length || 0;
@@ -114,17 +114,21 @@ const runEmailSync = async () => {
           }
         }
 
-        // ── 6. Team-member deck stub ─────────────────────────────────
+        // ── 6. Team-member stub ──────────────────────────────────────
         // If all extraction failed but the email is FROM a @xeedvc.com team
-        // member and contains a deck link, it's almost certainly a forwarded
-        // pitch. Create a stub so it lands in the CRM for manual review.
+        // member, it's almost certainly a forwarded pitch (even without a deck
+        // link). Create a stub so it lands in the CRM for manual review.
         if (!deal || !deal.company_name) {
           const isFromTeam = /@xeedvc\.com/i.test(email.from);
-          if (isFromTeam && email.deckLink) {
+          if (isFromTeam) {
             const subjectName = email.subject.replace(/^(fwd?:|re:|pitch|deck)\s*/i, '').trim();
-            console.log(`  [Cron] Extraction failed but team-member pitch detected — creating stub for "${subjectName}"`);
+            console.log(`  [Cron] Extraction failed but team-member forward detected — creating stub for "${subjectName}"`);
+            const attachmentNames = email.attachments?.filter(a => a.filename).map(a => a.filename).join(', ');
+            const notesParts = ['Team forward — requires manual review'];
+            if (email.deckLink) notesParts.push(`deck: ${email.deckLink}`);
+            if (attachmentNames) notesParts.push(`attachments: ${attachmentNames}`);
             deal = {
-              company_name: subjectName || 'Unknown (from deck link)',
+              company_name: subjectName || 'Unknown (team forward)',
               brand: null,
               founders: [],
               sector: null,
@@ -133,7 +137,7 @@ const runEmailSync = async () => {
               description: null,
               founder_background: null,
               poc: email.poc,
-              notes: `Deck link requires manual review: ${email.deckLink}`,
+              notes: notesParts.join(' — '),
             };
           }
         }
@@ -227,7 +231,13 @@ const runSheetsExport = async () => {
   }
 };
 
-const initCronJobs = () => {
+const initCronJobs = async () => {
+  // Clean up zombie syncs left by previous process kills
+  await pool.query(
+    `UPDATE sync_log SET status = 'error', error_message = 'Process restarted (zombie)', finished_at = NOW()
+     WHERE status = 'running' AND started_at < NOW() - INTERVAL '30 minutes'`
+  ).catch((err) => console.error('[Cron] Failed to clean zombie syncs:', err.message));
+
   // Every Sunday at 9:00 PM — email sync
   cron.schedule('0 21 * * 0', () => {
     console.log('[Cron] Sunday 9pm — triggering email sync');
