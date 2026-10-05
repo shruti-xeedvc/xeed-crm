@@ -65,33 +65,19 @@ router.get('/debug-status', async (req, res) => {
   }
 });
 
-// GET /api/gmail/debug-test-groq — list available Groq models and test one (temporary)
-router.get('/debug-test-groq', async (req, res) => {
+// GET /api/gmail/debug-test-gemini — test Gemini text extraction (temporary)
+router.get('/debug-test-gemini', async (req, res) => {
   try {
-    const Groq = require('groq-sdk');
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    const modelList = await groq.models.list();
-    const models = modelList.data?.map(m => m.id) || [];
-    // Try the first model that supports chat
-    let testResult = null;
-    for (const modelId of models.slice(0, 3)) {
-      try {
-        const c = await groq.chat.completions.create({
-          model: modelId,
-          messages: [{ role: 'user', content: 'Return {"ok": true}' }],
-          temperature: 0,
-          response_format: { type: 'json_object' },
-          max_tokens: 20,
-        });
-        testResult = { model: modelId, response: c.choices[0].message.content };
-        break;
-      } catch (err) {
-        // try next
-      }
-    }
-    res.json({ availableModels: models, testResult });
+    const { GoogleGenerativeAI } = require('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.0-flash',
+      generationConfig: { responseMimeType: 'application/json', temperature: 0 },
+    });
+    const result = await model.generateContent('Return {"ok": true}');
+    res.json({ success: true, response: result.response.text() });
   } catch (err) {
-    res.json({ error: err.message, status: err.status });
+    res.json({ success: false, error: err.message });
   }
 });
 

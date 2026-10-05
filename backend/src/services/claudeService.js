@@ -1,4 +1,3 @@
-const Groq = require('groq-sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { GoogleAIFileManager } = require('@google/generative-ai/server');
 const fs = require('fs');
@@ -7,8 +6,6 @@ const os = require('os');
 
 // PDFs larger than this are uploaded via the File API instead of sent inline
 const INLINE_PDF_LIMIT = 15 * 1024 * 1024; // 15 MB
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const SYSTEM_PROMPT = `You are a senior VC analyst at Xeed VC. Your job is to extract structured deal information from pitch emails, attached pitch decks, and company website text sent by founders.
 
@@ -22,13 +19,14 @@ Guidelines:
 - Notes: be specific — mention actual numbers (ARR, users, growth rate, GMV) if present.`;
 
 const extractDealFromEmail = async (subject, from, body, attachments = [], websiteText = null) => {
+  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
+
   const deckAttachments = attachments.filter((a) => a.readable && a.text);
   const hintAttachments = attachments.filter((a) => !a.readable);
 
-  // Increase excerpt limit — more deck context = better extraction
   let deckSection = '';
   for (const deck of deckAttachments) {
-    const excerpt = deck.text.slice(0, 15000); // ~3750 tokens per deck
+    const excerpt = deck.text.slice(0, 15000);
     deckSection += `\n\n--- Pitch Deck: "${deck.filename}" (${deck.pages} pages) ---\n${excerpt}`;
   }
 
@@ -45,7 +43,9 @@ const extractDealFromEmail = async (subject, from, body, attachments = [], websi
     ? `\n\n--- Company Website ---\n${websiteText.slice(0, 3000)}`
     : '';
 
-  const prompt = `Extract deal information from this pitch email${deckAttachments.length ? ', attached deck,' : ''}${websiteText ? ' and company website' : ''}.
+  const prompt = `${SYSTEM_PROMPT}
+
+Extract deal information from this pitch email${deckAttachments.length ? ', attached deck,' : ''}${websiteText ? ' and company website' : ''}.
 Return a single JSON object. If this is NOT a startup pitch or investment opportunity, return: {"is_pitch": false}
 
 IMPORTANT: Do NOT use the names of deck-hosting or file-sharing services (Papermark, DocSend, Google Drive, Dropbox, Notion, Pitch.com, etc.) as the company_name. These are just tools used to share the deck — the actual startup is different. Use the email subject or deck content to identify the real company.
@@ -75,23 +75,21 @@ Return JSON with these exact fields:
 
 Only return valid JSON. No markdown, no explanation.`;
 
-  const completion = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user',   content: prompt },
-    ],
-    temperature: 0.1,
-    response_format: { type: 'json_object' },
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.0-flash',
+    generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
   });
 
-  const text = completion.choices[0].message.content.trim();
+  const result = await model.generateContent(prompt);
+  const text = result.response.text().trim();
 
   let data;
   try {
-    data = JSON.parse(text);
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    data = JSON.parse(jsonMatch ? jsonMatch[0] : text);
   } catch {
-    console.error('[Groq] Invalid JSON response:', text.slice(0, 200));
+    console.error('[Gemini] Invalid JSON response for email extraction:', text.slice(0, 200));
     return null;
   }
 

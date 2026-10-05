@@ -7,24 +7,6 @@ const { exportDealsToSheet } = require('./sheetsService');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Retry a Groq call with exponential backoff on 429
-const withRateLimit = async (fn, retries = 3) => {
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      const is429 = err.message?.includes('429') || err.status === 429 || err.status_code === 429;
-      if (is429 && i < retries - 1) {
-        const wait = (i + 1) * 30000; // 30s, 60s, 90s
-        console.log(`  [Groq] Rate limited — waiting ${wait / 1000}s before retry ${i + 2}/${retries}`);
-        await sleep(wait);
-      } else {
-        throw err;
-      }
-    }
-  }
-};
-
 const runEmailSync = async () => {
   console.log('[Cron] Starting email sync...');
 
@@ -111,11 +93,11 @@ const runEmailSync = async () => {
             console.log(`  [Cron] Email has ${pdfCount} readable PDF(s) — passing to Groq`);
           }
           try {
-            deal = await withRateLimit(() =>
-              extractDealFromEmail(email.subject, email.from, email.body, email.attachments || [], email.websiteText || null)
+            deal = await extractDealFromEmail(
+              email.subject, email.from, email.body, email.attachments || [], email.websiteText || null
             );
-          } catch (groqErr) {
-            console.error(`  [Cron] Groq extraction failed (non-fatal): ${groqErr.message}`);
+          } catch (geminiErr) {
+            console.error(`  [Cron] Gemini text extraction failed (non-fatal): ${geminiErr.message}`);
             deal = null;
           }
         }
