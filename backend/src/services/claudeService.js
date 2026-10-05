@@ -27,16 +27,24 @@ const geminiWithRetry = async (fn, retries = 4) => {
   }
 };
 
-const SYSTEM_PROMPT = `You are a senior VC analyst at Xeed VC. Your job is to extract structured deal information from pitch emails, attached pitch decks, and company website text sent by founders.
+const SYSTEM_PROMPT = `You are a senior VC analyst at Xeed VC. Your job is to extract structured deal information from any email that contains information about a startup or investment opportunity.
+
+Sources you will receive include:
+- Pitch emails sent directly by founders
+- Forwarded founder pitch emails (body may be empty if only a PDF was attached)
+- Internal Xeed VC team meeting notes or deal summaries written after a founder call
+- Attached pitch deck text (extracted from PDFs)
+- Company website text
 
 Guidelines:
 - Pitch deck text is the PRIMARY source — it is more complete and authoritative than the email body.
 - Search the ENTIRE deck text carefully. Key fields like funding ask and founder background are often in the last few slides (Team, Ask, Financials).
 - For funding_ask: look for "$", "raise", "round", "valuation", "pre-money", "seeking", "investment ask" anywhere in the deck or email. Never return null if a number is mentioned.
-- For founder_background: look for a "Team" slide in the deck — extract LinkedIn URLs, past companies, education, and roles.
+- For founder_background: look for a "Team" slide in the deck or a "Founders" section — extract LinkedIn URLs, past companies, education, and roles.
 - For company website text: use it to fill any gaps left by the email and deck.
 - Extract information accurately. Use null only when truly absent after searching all sources.
-- Notes: be specific — mention actual numbers (ARR, users, growth rate, GMV) if present.`;
+- Notes: be specific — mention actual numbers (ARR, users, growth rate, GMV) if present.
+- Return is_pitch: false ONLY for emails with NO startup content: bounce notifications, Google security alerts, YouTube newsletters, calendar invites unrelated to any company, or similar system/admin emails.`;
 
 const extractDealFromEmail = async (subject, from, body, attachments = [], websiteText = null) => {
   if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
@@ -65,8 +73,8 @@ const extractDealFromEmail = async (subject, from, body, attachments = [], websi
 
   const prompt = `${SYSTEM_PROMPT}
 
-Extract deal information from this pitch email${deckAttachments.length ? ', attached deck,' : ''}${websiteText ? ' and company website' : ''}.
-Return a single JSON object. If this is NOT a startup pitch or investment opportunity, return: {"is_pitch": false}
+Extract deal information from this email${deckAttachments.length ? ', attached deck,' : ''}${websiteText ? ' and company website' : ''}.
+Return a single JSON object. If this email contains NO startup information (e.g. it is a bounce notification or system alert), return: {"is_pitch": false}
 
 IMPORTANT: Do NOT use the names of deck-hosting or file-sharing services (Papermark, DocSend, Google Drive, Dropbox, Notion, Pitch.com, etc.) as the company_name. These are just tools used to share the deck — the actual startup is different. Use the email subject or deck content to identify the real company.
 

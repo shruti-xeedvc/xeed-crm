@@ -138,30 +138,39 @@ const collectAttachments = async (gmail, messageId, payload, depth = 0) => {
           rawBase64 = body.data;
         }
 
-        // Convert base64url → Buffer and extract text with pdf-parse
+        // Convert base64url → Buffer
         const pdfBuffer = Buffer.from(
           rawBase64.replace(/-/g, '+').replace(/_/g, '/'),
           'base64'
         );
-        const parsed = await pdfParse(pdfBuffer);
-        const extractedText = parsed.text?.trim() || '';
+
+        // Try to extract text with pdf-parse. If it fails (encrypted, unusual format,
+        // image-only deck) we still keep the buffer so Gemini can read it natively.
+        let extractedText = '';
+        let parsedPages = 0;
+        try {
+          const parsed = await pdfParse(pdfBuffer);
+          extractedText = parsed.text?.trim() || '';
+          parsedPages = parsed.numpages;
+        } catch (parseErr) {
+          console.log(`  [Attach] pdf-parse failed for "${filename}" — will use Gemini PDF: ${parseErr.message.slice(0, 80)}`);
+        }
 
         // Upload PDF to Supabase Storage
         const safeFilename = `${messageId}_${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
         const fileUrl = await uploadPdf(safeFilename, pdfBuffer);
 
-        // Flag image-based PDFs (scanned slides — pdf-parse returns no usable text)
-        // We keep the buffer so cronService can pass it to Gemini's native PDF reader
+        // Flag image-based PDFs (scanned slides OR parse failure — Gemini reads them natively)
         const isImageBased = extractedText.length < 300;
         if (isImageBased) {
-          console.log(`  [Attach] "${filename}" is image-based (${extractedText.length} chars) — flagged for Gemini PDF extraction`);
+          console.log(`  [Attach] "${filename}" is image-based / unreadable (${extractedText.length} chars) — flagged for Gemini PDF extraction`);
         }
 
         attachments.push({
           filename,
           mimeType,
           text: extractedText,
-          pages: parsed.numpages,
+          pages: parsedPages,
           readable: true,
           fileUrl,
           isImageBased,

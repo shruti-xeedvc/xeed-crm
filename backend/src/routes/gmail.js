@@ -30,6 +30,36 @@ router.post('/debug-clear-messages', async (req, res) => {
   }
 });
 
+// POST /api/gmail/debug-full-retry — clears all skipped entries, removes placeholder stubs,
+// and triggers a fresh sync (temporary debug endpoint)
+router.post('/debug-full-retry', async (req, res) => {
+  try {
+    // 1. Remove deals that were created as empty stubs (team-forward placeholders)
+    //    identified by having "Team forward — requires manual review" in their notes
+    const { rows: stubDeals } = await pool.query(
+      `DELETE FROM deals WHERE notes LIKE '%Team forward%requires manual review%' RETURNING id, company_name`
+    );
+    // 2. Clear processed_emails entries for those deleted deals
+    if (stubDeals.length > 0) {
+      const stubIds = stubDeals.map(d => d.id);
+      await pool.query('DELETE FROM processed_emails WHERE deal_id = ANY($1)', [stubIds]);
+    }
+    // 3. Clear ALL remaining skipped entries so the next sync re-attempts them
+    const { rows: skipped } = await pool.query(
+      `DELETE FROM processed_emails WHERE status = 'skipped' RETURNING id`
+    );
+    const summary = {
+      stubsDeleted: stubDeals.map(d => d.company_name),
+      skippedCleared: skipped.length,
+    };
+    console.log(`[Debug] full-retry: removed ${stubDeals.length} stubs, cleared ${skipped.length} skipped entries`);
+    res.json({ message: 'Cleanup done — sync triggered', ...summary });
+    runEmailSync().catch((err) => console.error('debug-full-retry sync error:', err));
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
 // GET /api/gmail/debug-inbox — list recent Gmail messages directly from API (temporary)
 router.get('/debug-inbox', async (req, res) => {
   try {
