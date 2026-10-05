@@ -147,7 +147,10 @@ const extractDealFromImages = async (subject, from, images) => {
   if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-flash-latest',
+    generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
+  });
 
   const imageParts = images.slice(0, 10).map((b64) => ({
     inlineData: { mimeType: 'image/jpeg', data: b64 },
@@ -214,29 +217,35 @@ const extractDealFromPdf = async (subject, from, pdfBuffer) => {
   if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-flash-latest',
+    generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
+  });
 
-  const prompt = `You are a senior VC analyst. This is a startup pitch deck PDF sent to Xeed VC.
+  const prompt = `You are a senior VC analyst at Xeed VC. This PDF was sent to deals@xeedvc.com as part of startup deal flow. It may be ANY of:
+- A founder's pitch deck (slides about their startup)
+- Meeting notes or a deal summary compiled by a Xeed VC team member after a founder call
+- A one-pager, teaser, or investor memo about a startup
 
 Email subject: ${subject}
 From: ${from}
 
-Read every page carefully. Extract deal information and return ONLY a valid JSON object — no markdown, no explanation:
+Read every page carefully. Extract deal information and return a JSON object:
 {
   "is_pitch": true,
   "company_name": "startup name",
   "brand": "product/brand name if different, else null",
-  "founders": ["full names from Team slide"],
+  "founders": ["full names — search Team slide or meeting notes"],
   "sector": "one of: Fintech, SaaS, HealthTech, EdTech, DeepTech, Consumer, Logistics, CleanTech, AgriTech, Other",
   "location": "City, Country",
-  "funding_ask": "Amount the startup is ACTIVELY RAISING in this round — only if the deck/email explicitly says 'raising', 'seeking', 'ask', 'round size', 'we are raising $X'. Do NOT use valuation, revenue, GMV or any other metric. Return null if no explicit fundraise amount is stated.",
+  "funding_ask": "Amount the startup is ACTIVELY RAISING — only if explicitly stated ('raising', 'seeking', 'ask', 'round size'). null if not stated.",
   "description": "1–2 sentences: what the company does",
-  "founder_background": "LinkedIn URLs or: past companies, education, roles from Team slide",
+  "founder_background": "LinkedIn URLs or: past companies, education, roles — be specific",
   "poc": null,
   "notes": "2–3 sentences: key traction metrics (ARR, users, GMV, growth) and honest assessment"
 }
 
-If this is not a startup pitch, return: {"is_pitch": false}`;
+Return is_pitch: false ONLY if the PDF has NO startup content at all (e.g. it is a blank document, a terms-of-service PDF, or an invoice unrelated to any startup). Meeting notes about a startup ARE startup content.`;
 
   let pdfPart;
   let uploadedFileName = null;

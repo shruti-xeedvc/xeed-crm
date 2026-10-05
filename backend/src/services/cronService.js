@@ -75,11 +75,12 @@ const runEmailSync = async () => {
           if (!deal) console.log(`  [Cron] Papermark extraction failed — trying other methods`);
         }
 
-        // ── 3. Image-based PDF → Gemini native PDF reader ───────
-        if (!deal && imagePdfs.length > 0) {
-          console.log(`  [Cron] Image-based PDF detected in "${imagePdfs[0].filename}" — using Gemini PDF extraction`);
+        // ── 3. Gemini native PDF reader — runs for ALL PDFs (image-based or text-based)
+        // Gemini's native PDF understanding is always superior to garbled pdf-parse text
+        if (!deal && allPdfs.length > 0) {
+          console.log(`  [Cron] PDF detected — using Gemini native PDF extraction on "${allPdfs[0].filename}"`);
           try {
-            deal = await extractDealFromPdf(email.subject, email.from, imagePdfs[0].pdfBuffer);
+            deal = await extractDealFromPdf(email.subject, email.from, allPdfs[0].pdfBuffer);
             if (deal) console.log(`  [Cron] Gemini PDF extraction succeeded for "${deal.company_name}"`);
             else console.log(`  [Cron] Gemini PDF extraction returned no deal — falling back to email text`);
           } catch (err) {

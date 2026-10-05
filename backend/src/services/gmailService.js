@@ -177,7 +177,7 @@ const collectAttachments = async (gmail, messageId, payload, depth = 0) => {
           // Always retain buffer — used by Gemini PDF extraction as fallback
           pdfBuffer,
         });
-        console.log(`  [Attach] Extracted text from "${filename}" — ${parsed.numpages} pages, ${Math.round(extractedText.length / 1024)} KB text`);
+        console.log(`  [Attach] PDF "${filename}" — ${parsedPages} pages, ${Math.round(extractedText.length / 1024)} KB text extracted, isImageBased=${isImageBased}`);
       } catch (err) {
         console.error(`  [Attach] Failed to parse "${filename}": ${err.message}`);
       }
