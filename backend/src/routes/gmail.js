@@ -1,7 +1,7 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const { requireAuth } = require('../middleware/auth');
-const { getAuthUrl, exchangeCode, getConnectionStatus, getAuthenticatedClient } = require('../services/gmailService');
+const { getAuthUrl, exchangeCode, getConnectionStatus, getAuthenticatedClient, fetchPitchEmailById } = require('../services/gmailService');
 const { runEmailSync, runSheetsExport } = require('../services/cronService');
 const { importDealsFromSheet } = require('../services/sheetsService');
 
@@ -109,41 +109,127 @@ router.post('/debug-clear-messages', async (req, res) => {
   }
 });
 
-// POST /api/gmail/debug-full-retry — clears all skipped entries, removes placeholder stubs,
-// and triggers a fresh sync (temporary debug endpoint)
+// POST /api/gmail/debug-full-retry — clears orphaned + skipped processed_emails entries
+// and triggers a fresh sync. Does NOT delete any deals from the CRM.
 router.post('/debug-full-retry', async (req, res) => {
   try {
-    // 1. Remove deals that were created as empty stubs (team-forward placeholders)
-    //    identified by having "Team forward — requires manual review" in their notes
-    const { rows: stubDeals } = await pool.query(
-      `DELETE FROM deals WHERE notes LIKE '%Team forward%requires manual review%' RETURNING id, company_name`
-    );
-    // 2. Clear processed_emails entries for those deleted deals
-    if (stubDeals.length > 0) {
-      const stubIds = stubDeals.map(d => d.id);
-      await pool.query('DELETE FROM processed_emails WHERE deal_id = ANY($1)', [stubIds]);
-    }
-    // 3. Clear orphaned processed_emails entries:
-    //    a) deal_id points to a deleted deal
-    //    b) status='added' but deal_id is NULL (failed insert left a ghost entry)
+    // 1. Clear orphaned processed_emails entries (deal deleted from CRM but entry remains)
+    //    Also clears ghost entries where status='added' but deal_id is NULL
     const { rows: orphaned } = await pool.query(
       `DELETE FROM processed_emails
        WHERE (deal_id IS NOT NULL AND deal_id NOT IN (SELECT id FROM deals))
           OR (status = 'added' AND deal_id IS NULL)
        RETURNING id`
     );
-    // 4. Clear ALL remaining skipped entries so the next sync re-attempts them
+    // 2. Clear skipped entries so the next sync re-attempts them
     const { rows: skipped } = await pool.query(
       `DELETE FROM processed_emails WHERE status = 'skipped' RETURNING id`
     );
-    const summary = {
-      stubsDeleted: stubDeals.map(d => d.company_name),
-      orphanedCleared: orphaned.length,
-      skippedCleared: skipped.length,
-    };
-    console.log(`[Debug] full-retry: removed ${stubDeals.length} stubs, cleared ${orphaned.length} orphaned + ${skipped.length} skipped entries`);
+    const summary = { orphanedCleared: orphaned.length, skippedCleared: skipped.length };
+    console.log(`[Debug] full-retry: cleared ${orphaned.length} orphaned + ${skipped.length} skipped entries — no deals deleted`);
     res.json({ message: 'Cleanup done — sync triggered', ...summary });
     runEmailSync().catch((err) => console.error('debug-full-retry sync error:', err));
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
+// POST /api/gmail/retry-stubs — re-extract stub deals in-place without deleting them.
+// Finds deals with "requires manual review" in notes, re-runs the full extraction pipeline
+// on their source emails, and UPDATEs the deal if better data is found.
+router.post('/retry-stubs', async (req, res) => {
+  try {
+    const { google } = require('googleapis');
+    const auth = await getAuthenticatedClient();
+    const gmail = google.gmail({ version: 'v1', auth });
+
+    // Find stub deals that came from a Gmail message
+    const { rows: stubs } = await pool.query(
+      `SELECT d.id, d.company_name, d.email_source_id
+       FROM deals d
+       WHERE d.notes LIKE '%requires manual review%'
+         AND d.email_source_id IS NOT NULL
+         AND d.description IS NULL
+       ORDER BY d.date_added DESC`
+    );
+
+    res.json({ message: `Re-extracting ${stubs.length} stubs — running in background`, count: stubs.length });
+
+    // Run async — don't block the HTTP response
+    (async () => {
+      const { extractDealFromEmail, extractDealFromImages, extractDealFromPdf } = require('../services/claudeService');
+      const { extractFromDocsend, extractFromPapermark } = require('../services/docsendService');
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+      let updated = 0;
+      let failed = 0;
+
+      for (const stub of stubs) {
+        try {
+          await sleep(2000);
+          const email = await fetchPitchEmailById(gmail, stub.email_source_id);
+          if (!email) { failed++; continue; }
+
+          const allPdfs   = email.attachments?.filter(a => a.readable && a.pdfBuffer) || [];
+          const imagePdfs = email.attachments?.filter(a => a.isImageBased && a.pdfBuffer) || [];
+          const hasDocsend   = email.deckLink && /docsend\.com/i.test(email.deckLink);
+          const hasPapermark = email.deckLink && /papermark\.(com|io)\/view\//i.test(email.deckLink);
+          const viewerEmail  = email.xeedEmail || 'deals@xeedvc.com';
+
+          let deal = null;
+
+          if (!deal && hasDocsend && allPdfs.length === 0) {
+            try {
+              const slides = await extractFromDocsend(email.deckLink, viewerEmail);
+              if (slides.length > 0) deal = await extractDealFromImages(subject, from, slides);
+            } catch {}
+          }
+          if (!deal && hasPapermark && allPdfs.length === 0) {
+            try {
+              const slides = await extractFromPapermark(email.deckLink, viewerEmail);
+              if (slides.length > 0) deal = await extractDealFromImages(subject, from, slides);
+            } catch {}
+          }
+          if (!deal && allPdfs.length > 0) {
+            try { deal = await extractDealFromPdf(subject, from, allPdfs[0].pdfBuffer); } catch {}
+          }
+          if (!deal) {
+            try { deal = await extractDealFromEmail(subject, from, email.body, email.attachments || [], email.websiteText || null); } catch {}
+          }
+          if (!deal && allPdfs.length > 0) {
+            try { deal = await extractDealFromPdf(subject, from, allPdfs[0].pdfBuffer); } catch {}
+          }
+
+          if (deal && (deal.description || deal.sector || deal.funding_ask || deal.founders?.length)) {
+            await pool.query(
+              `UPDATE deals SET
+                 company_name       = COALESCE($1, company_name),
+                 description        = COALESCE($2, description),
+                 sector             = COALESCE($3, sector),
+                 location           = COALESCE($4, location),
+                 funding_ask        = COALESCE($5, funding_ask),
+                 founder_background = COALESCE($6, founder_background),
+                 founders           = CASE WHEN $7::text[] IS NOT NULL AND array_length($7::text[], 1) > 0 THEN $7::text[] ELSE founders END,
+                 brand              = COALESCE($8, brand)
+               WHERE id = $9`,
+              [deal.company_name, deal.description, deal.sector, deal.location,
+               deal.funding_ask, deal.founder_background,
+               deal.founders?.length ? deal.founders : null,
+               deal.brand, stub.id]
+            );
+            console.log(`[RetryStubs] Updated stub "${stub.company_name}" with extracted data`);
+            updated++;
+          } else {
+            console.log(`[RetryStubs] Extraction still returned no data for "${stub.company_name}"`);
+            failed++;
+          }
+        } catch (err) {
+          console.error(`[RetryStubs] Error on "${stub.company_name}": ${err.message}`);
+          failed++;
+        }
+      }
+      console.log(`[RetryStubs] Done — updated: ${updated}, still no data: ${failed}`);
+    })().catch(err => console.error('[RetryStubs] Fatal:', err.message));
   } catch (err) {
     res.json({ error: err.message });
   }

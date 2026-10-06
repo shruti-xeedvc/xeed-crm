@@ -388,4 +388,74 @@ const fetchPitchEmails = async (maxResults = 500) => {
   return messages;
 };
 
-module.exports = { getAuthUrl, exchangeCode, getConnectionStatus, fetchPitchEmails, getAuthenticatedClient };
+// ------------------------------------------------------------
+// Fetch a single email by message ID with full attachment processing.
+// Used by the retry-stubs endpoint to re-extract individual messages.
+// ------------------------------------------------------------
+const fetchPitchEmailById = async (gmail, messageId) => {
+  const msg = await gmail.users.messages.get({ userId: 'me', id: messageId, format: 'full' });
+  const headers = msg.data.payload.headers;
+  const subject    = headers.find((h) => h.name === 'Subject')?.value || '';
+  const from       = headers.find((h) => h.name === 'From')?.value    || '';
+  const cc         = headers.find((h) => h.name === 'Cc')?.value      || '';
+  const to         = headers.find((h) => h.name === 'To')?.value      || '';
+  const receivedAt = msg.data.internalDate ? new Date(Number(msg.data.internalDate)) : new Date();
+
+  const body        = extractBody(msg.data.payload);
+  const attachments = await collectAttachments(gmail, messageId, msg.data.payload);
+
+  const POC_NAMES = ['Anirudh', 'Shruti', 'Sailesh', 'Aditya'];
+  const headerText = [from, cc, to].join(' ');
+  const poc = POC_NAMES.find((n) => headerText.toLowerCase().includes(n.toLowerCase())) || null;
+
+  const xeedEmailMatch = headerText.match(/[a-zA-Z0-9._%+-]+@xeedvc\.com/i);
+  const xeedEmail = xeedEmailMatch ? xeedEmailMatch[0].toLowerCase() : null;
+
+  const SKIP_DOMAINS = /linkedin|twitter|facebook|instagram|google|dropbox|notion|docsend|papermark|pitch\.com|youtu|calendly|zoom|mailto|whatsapp|t\.me/i;
+  const ALL_URLS = [...body.matchAll(/https?:\/\/[^\s<>"')]+/gi)].map((m) => m[0]);
+  let websiteUrl = null;
+  for (const url of ALL_URLS) {
+    try {
+      const host = new URL(url).hostname;
+      if (!SKIP_DOMAINS.test(host)) { websiteUrl = url; break; }
+    } catch { /* invalid URL */ }
+  }
+
+  let websiteText = null;
+  if (websiteUrl) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+      const resp = await fetch(websiteUrl, { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
+      clearTimeout(timer);
+      const html = await resp.text();
+      websiteText = html
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 4000);
+    } catch {}
+  }
+
+  const DECK_PATTERNS = [
+    /https?:\/\/docs\.google\.com\/presentation\/[^\s<>"')]+/i,
+    /https?:\/\/drive\.google\.com\/[^\s<>"')]+/i,
+    /https?:\/\/[^\s<>"')]*docsend\.com\/[^\s<>"')]+/i,
+    /https?:\/\/[^\s<>"')]*dropbox\.com\/[^\s<>"')]+/i,
+    /https?:\/\/[^\s<>"')]*notion\.so\/[^\s<>"')]+/i,
+    /https?:\/\/pitch\.com\/[^\s<>"')]+/i,
+    /https?:\/\/[^\s<>"')]*papermark\.com\/view\/[^\s<>"')]+/i,
+    /https?:\/\/[^\s<>"')]*papermark\.io\/view\/[^\s<>"')]+/i,
+  ];
+  let deckLink = null;
+  for (const pattern of DECK_PATTERNS) {
+    const match = body.match(pattern);
+    if (match) { deckLink = match[0]; break; }
+  }
+
+  return { id: messageId, subject, from, body, attachments, poc, deckLink, websiteText, xeedEmail, receivedAt };
+};
+
+module.exports = { getAuthUrl, exchangeCode, getConnectionStatus, fetchPitchEmails, fetchPitchEmailById, getAuthenticatedClient };
