@@ -268,7 +268,12 @@ const fetchPitchEmails = async (maxResults = 500) => {
       [id]
     );
     if (rows[0]) {
-      if (rows[0].status === 'added' && rows[0].deal_id) {
+      if (rows[0].status === 'added' && !rows[0].deal_id) {
+        // deal_id is NULL but status is 'added' — ghost entry from a failed/aborted insert
+        await pool.query('DELETE FROM processed_emails WHERE message_id = $1', [id]);
+        console.log(`[Gmail] Cleared ghost processed_emails for ${id} (status=added, deal_id=null) — will re-process`);
+        // Fall through to reprocess
+      } else if (rows[0].status === 'added' && rows[0].deal_id) {
         const { rows: dealCheck } = await pool.query(
           'SELECT id FROM deals WHERE id = $1', [rows[0].deal_id]
         );

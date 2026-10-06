@@ -123,10 +123,13 @@ router.post('/debug-full-retry', async (req, res) => {
       const stubIds = stubDeals.map(d => d.id);
       await pool.query('DELETE FROM processed_emails WHERE deal_id = ANY($1)', [stubIds]);
     }
-    // 3. Clear orphaned processed_emails entries (deal deleted but entry remains — blocks re-sync)
+    // 3. Clear orphaned processed_emails entries:
+    //    a) deal_id points to a deleted deal
+    //    b) status='added' but deal_id is NULL (failed insert left a ghost entry)
     const { rows: orphaned } = await pool.query(
       `DELETE FROM processed_emails
-       WHERE deal_id IS NOT NULL AND deal_id NOT IN (SELECT id FROM deals)
+       WHERE (deal_id IS NOT NULL AND deal_id NOT IN (SELECT id FROM deals))
+          OR (status = 'added' AND deal_id IS NULL)
        RETURNING id`
     );
     // 4. Clear ALL remaining skipped entries so the next sync re-attempts them
