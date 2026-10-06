@@ -11,18 +11,25 @@ const INLINE_PDF_LIMIT = 1 * 1024 * 1024; // 1 MB
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Retry Gemini calls on 503 (model temporarily overloaded)
+// Retry Gemini calls on 503 (model temporarily overloaded) or 429 (transient rate limit)
 const geminiWithRetry = async (fn, retries = 6) => {
   for (let i = 0; i < retries; i++) {
     try {
       return await fn();
     } catch (err) {
-      const is503 = err.message?.includes('[503') || err.status === 503;
-      if (is503 && i < retries - 1) {
+      const msg = err.message || '';
+      const is503 = msg.includes('[503') || err.status === 503;
+      // 429 with "Quota exceeded for ...free_tier_requests" is a daily hard limit — don't retry
+      const is429DailyLimit = msg.includes('[429') && msg.includes('free_tier_requests');
+      const is429Transient = msg.includes('[429') && !is429DailyLimit;
+      if ((is503 || is429Transient) && i < retries - 1) {
         const wait = (i + 1) * 12000; // 12s, 24s, 36s, 48s, 60s
-        console.log(`  [Gemini] 503 overloaded — retrying in ${wait / 1000}s (attempt ${i + 2}/${retries})`);
+        console.log(`  [Gemini] ${is503 ? '503 overloaded' : '429 rate-limited'} — retrying in ${wait / 1000}s (attempt ${i + 2}/${retries})`);
         await sleep(wait);
       } else {
+        if (is429DailyLimit) {
+          console.error(`  [Gemini] DAILY QUOTA EXHAUSTED — free tier limit reached. Upgrade the API key to paid plan to process more PDFs today.`);
+        }
         throw err;
       }
     }
@@ -107,7 +114,7 @@ Only return valid JSON. No markdown, no explanation.`;
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-flash-latest',
     generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
   });
 
@@ -150,7 +157,7 @@ const extractDealFromImages = async (subject, from, images) => {
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-flash-latest',
     generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
   });
 
@@ -220,7 +227,7 @@ const extractDealFromPdf = async (subject, from, pdfBuffer) => {
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-flash-latest',
     generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
   });
 
