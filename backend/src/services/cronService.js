@@ -20,7 +20,7 @@ const runEmailSync = async () => {
   let dealsSkipped = 0;
 
   try {
-    const emails = await fetchPitchEmails(300);
+    const emails = await fetchPitchEmails(500);
     emailsScanned = emails.length;
     console.log(`[Cron] Found ${emails.length} unprocessed candidate emails`);
 
