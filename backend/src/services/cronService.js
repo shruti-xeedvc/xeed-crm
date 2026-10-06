@@ -116,28 +116,28 @@ const runEmailSync = async () => {
         }
 
         // ── 6. Team-member stub ──────────────────────────────────────
-        // If all extraction failed but the email is FROM a @xeedvc.com team
-        // member, it's almost certainly a forwarded pitch (even without a deck
-        // link). Create a stub so it lands in the CRM for manual review.
+        // If company_name is missing but the email is FROM a @xeedvc.com team
+        // member, fill in company_name from the subject and add a review note.
+        // Any fields Gemini DID extract (description, sector, etc.) are kept.
         if (!deal || !deal.company_name) {
           const isFromTeam = /@xeedvc\.com/i.test(email.from);
           if (isFromTeam) {
             const subjectName = email.subject.replace(/^(fwd?:|re:|pitch|deck)\s*/i, '').trim();
-            console.log(`  [Cron] Extraction failed but team-member forward detected — creating stub for "${subjectName}"`);
+            console.log(`  [Cron] No company_name — team-member forward detected, using subject "${subjectName}"`);
             const attachmentNames = email.attachments?.filter(a => a.filename).map(a => a.filename).join(', ');
             const notesParts = ['Team forward — requires manual review'];
             if (email.deckLink) notesParts.push(`deck: ${email.deckLink}`);
             if (attachmentNames) notesParts.push(`attachments: ${attachmentNames}`);
             deal = {
-              company_name: subjectName || 'Unknown (team forward)',
-              brand: null,
-              founders: [],
-              sector: null,
-              location: null,
-              funding_ask: null,
-              description: null,
-              founder_background: null,
-              poc: email.poc,
+              company_name: deal?.company_name || subjectName || 'Unknown (team forward)',
+              brand:              deal?.brand              || null,
+              founders:           deal?.founders?.length ? deal.founders : [],
+              sector:             deal?.sector             || null,
+              location:           deal?.location           || null,
+              funding_ask:        deal?.funding_ask        || null,
+              description:        deal?.description        || null,
+              founder_background: deal?.founder_background || null,
+              poc:                deal?.poc                || email.poc,
               notes: notesParts.join(' — '),
             };
           }
