@@ -44,15 +44,22 @@ router.post('/debug-full-retry', async (req, res) => {
       const stubIds = stubDeals.map(d => d.id);
       await pool.query('DELETE FROM processed_emails WHERE deal_id = ANY($1)', [stubIds]);
     }
-    // 3. Clear ALL remaining skipped entries so the next sync re-attempts them
+    // 3. Clear orphaned processed_emails entries (deal deleted but entry remains — blocks re-sync)
+    const { rows: orphaned } = await pool.query(
+      `DELETE FROM processed_emails
+       WHERE deal_id IS NOT NULL AND deal_id NOT IN (SELECT id FROM deals)
+       RETURNING id`
+    );
+    // 4. Clear ALL remaining skipped entries so the next sync re-attempts them
     const { rows: skipped } = await pool.query(
       `DELETE FROM processed_emails WHERE status = 'skipped' RETURNING id`
     );
     const summary = {
       stubsDeleted: stubDeals.map(d => d.company_name),
+      orphanedCleared: orphaned.length,
       skippedCleared: skipped.length,
     };
-    console.log(`[Debug] full-retry: removed ${stubDeals.length} stubs, cleared ${skipped.length} skipped entries`);
+    console.log(`[Debug] full-retry: removed ${stubDeals.length} stubs, cleared ${orphaned.length} orphaned + ${skipped.length} skipped entries`);
     res.json({ message: 'Cleanup done — sync triggered', ...summary });
     runEmailSync().catch((err) => console.error('debug-full-retry sync error:', err));
   } catch (err) {
