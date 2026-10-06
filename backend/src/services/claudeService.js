@@ -286,6 +286,7 @@ Return is_pitch: false ONLY if the PDF has NO startup content at all (e.g. it is
   }
 
   const text = result.response.text().trim();
+  console.log(`  [Gemini] PDF raw response (first 300): ${text.slice(0, 300)}`);
 
   let data;
   try {
@@ -296,7 +297,10 @@ Return is_pitch: false ONLY if the PDF has NO startup content at all (e.g. it is
     return null;
   }
 
-  if (!data.is_pitch) return null;
+  if (!data.is_pitch) {
+    console.log(`  [Gemini] PDF marked is_pitch:false — subject: "${subject}", company_name: "${data.company_name}"`);
+    return null;
+  }
 
   return {
     company_name:       data.company_name       || null,

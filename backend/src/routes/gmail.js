@@ -170,34 +170,39 @@ router.post('/retry-stubs', async (req, res) => {
           const email = await fetchPitchEmailById(gmail, stub.email_source_id);
           if (!email) { failed++; continue; }
 
+          const { subject, from } = email;
           const allPdfs   = email.attachments?.filter(a => a.readable && a.pdfBuffer) || [];
-          const imagePdfs = email.attachments?.filter(a => a.isImageBased && a.pdfBuffer) || [];
           const hasDocsend   = email.deckLink && /docsend\.com/i.test(email.deckLink);
           const hasPapermark = email.deckLink && /papermark\.(com|io)\/view\//i.test(email.deckLink);
           const viewerEmail  = email.xeedEmail || 'deals@xeedvc.com';
+
+          console.log(`[RetryStubs] Processing "${stub.company_name}": subject="${subject}", pdfs=${allPdfs.length}, deckLink=${email.deckLink || 'none'}`);
 
           let deal = null;
 
           if (!deal && hasDocsend && allPdfs.length === 0) {
             try {
               const slides = await extractFromDocsend(email.deckLink, viewerEmail);
-              if (slides.length > 0) deal = await extractDealFromImages(subject, from, slides);
-            } catch {}
+              if (slides.length > 0) deal = await extractDealFromImages(email.subject, email.from, slides);
+            } catch (e) { console.log(`[RetryStubs]   DocSend failed: ${e.message}`); }
           }
           if (!deal && hasPapermark && allPdfs.length === 0) {
             try {
               const slides = await extractFromPapermark(email.deckLink, viewerEmail);
-              if (slides.length > 0) deal = await extractDealFromImages(subject, from, slides);
-            } catch {}
+              if (slides.length > 0) deal = await extractDealFromImages(email.subject, email.from, slides);
+            } catch (e) { console.log(`[RetryStubs]   Papermark failed: ${e.message}`); }
           }
           if (!deal && allPdfs.length > 0) {
-            try { deal = await extractDealFromPdf(subject, from, allPdfs[0].pdfBuffer); } catch {}
+            try {
+              deal = await extractDealFromPdf(subject, from, allPdfs[0].pdfBuffer);
+              console.log(`[RetryStubs]   PDF extraction result: ${deal ? `company="${deal.company_name}" desc=${!!deal.description}` : 'null'}`);
+            } catch (e) { console.log(`[RetryStubs]   PDF extraction threw: ${e.message}`); }
           }
           if (!deal) {
-            try { deal = await extractDealFromEmail(subject, from, email.body, email.attachments || [], email.websiteText || null); } catch {}
-          }
-          if (!deal && allPdfs.length > 0) {
-            try { deal = await extractDealFromPdf(subject, from, allPdfs[0].pdfBuffer); } catch {}
+            try {
+              deal = await extractDealFromEmail(subject, from, email.body, email.attachments || [], email.websiteText || null);
+              console.log(`[RetryStubs]   Email extraction result: ${deal ? `company="${deal.company_name}" desc=${!!deal.description}` : 'null'}`);
+            } catch (e) { console.log(`[RetryStubs]   Email extraction threw: ${e.message}`); }
           }
 
           if (deal && (deal.description || deal.sector || deal.funding_ask || deal.founders?.length)) {
@@ -230,6 +235,58 @@ router.post('/retry-stubs', async (req, res) => {
       }
       console.log(`[RetryStubs] Done — updated: ${updated}, still no data: ${failed}`);
     })().catch(err => console.error('[RetryStubs] Fatal:', err.message));
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
+// GET /api/gmail/debug-test-extraction?messageId=xxx — test extraction on one email, returns raw Gemini response
+router.get('/debug-test-extraction', async (req, res) => {
+  const { messageId } = req.query;
+  if (!messageId) return res.status(400).json({ error: 'messageId query param required' });
+  try {
+    const { google } = require('googleapis');
+    const auth = await getAuthenticatedClient();
+    const gmail = google.gmail({ version: 'v1', auth });
+    const email = await fetchPitchEmailById(gmail, messageId);
+    if (!email) return res.json({ error: 'Could not fetch email' });
+
+    const allPdfs = email.attachments?.filter(a => a.readable && a.pdfBuffer) || [];
+    const pdfSizes = allPdfs.map(a => ({ filename: a.filename, bytes: a.pdfBuffer.length, isImageBased: a.isImageBased, parsedChars: a.text?.length }));
+
+    // Call Gemini PDF extraction with raw response logging
+    let geminiRaw = null;
+    let geminiParsed = null;
+    let geminiError = null;
+    if (allPdfs.length > 0) {
+      try {
+        const { GoogleGenerativeAI } = require('@google/generative-ai');
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({
+          model: 'gemini-flash-latest',
+          generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
+        });
+        const pdfBuffer = allPdfs[0].pdfBuffer;
+        const pdfPart = { inlineData: { mimeType: 'application/pdf', data: pdfBuffer.toString('base64') } };
+        const prompt = `You are a senior VC analyst. This PDF is a startup pitch deck or related document. Extract key info and return JSON: {"is_pitch": true/false, "company_name": "...", "description": "...", "sector": "...", "funding_ask": "..."}. Return is_pitch:false only if it has zero startup content.`;
+        const result = await model.generateContent([pdfPart, { text: prompt }]);
+        geminiRaw = result.response.text();
+        try { geminiParsed = JSON.parse(geminiRaw); } catch { geminiParsed = 'JSON parse failed'; }
+      } catch (err) {
+        geminiError = err.message;
+      }
+    }
+
+    res.json({
+      subject: email.subject,
+      from: email.from,
+      bodyLength: email.body?.length,
+      attachmentCount: allPdfs.length,
+      pdfSizes,
+      geminiRaw,
+      geminiParsed,
+      geminiError,
+    });
   } catch (err) {
     res.json({ error: err.message });
   }
