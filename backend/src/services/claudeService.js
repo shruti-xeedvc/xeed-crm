@@ -4,20 +4,22 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-// PDFs larger than this are uploaded via the File API instead of sent inline
-const INLINE_PDF_LIMIT = 15 * 1024 * 1024; // 15 MB
+// PDFs larger than this are uploaded via the File API instead of sent inline.
+// Image-based PDFs (all pages are scanned images) must be kept small for inline use
+// — above 1 MB they reliably cause 503 "high demand" errors when sent as base64.
+const INLINE_PDF_LIMIT = 1 * 1024 * 1024; // 1 MB
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Retry Gemini calls on 503 (model temporarily overloaded)
-const geminiWithRetry = async (fn, retries = 4) => {
+const geminiWithRetry = async (fn, retries = 6) => {
   for (let i = 0; i < retries; i++) {
     try {
       return await fn();
     } catch (err) {
       const is503 = err.message?.includes('[503') || err.status === 503;
       if (is503 && i < retries - 1) {
-        const wait = (i + 1) * 8000; // 8s, 16s, 24s
+        const wait = (i + 1) * 12000; // 12s, 24s, 36s, 48s, 60s
         console.log(`  [Gemini] 503 overloaded — retrying in ${wait / 1000}s (attempt ${i + 2}/${retries})`);
         await sleep(wait);
       } else {

@@ -166,7 +166,7 @@ router.post('/retry-stubs', async (req, res) => {
 
       for (const stub of stubs) {
         try {
-          await sleep(2000);
+          await sleep(5000);
           const email = await fetchPitchEmailById(gmail, stub.email_source_id);
           if (!email) { failed++; continue; }
 
