@@ -156,9 +156,14 @@ const collectAttachments = async (gmail, messageId, payload, depth = 0) => {
           console.log(`  [Attach] pdf-parse failed for "${filename}" — will use Gemini PDF: ${parseErr.message.slice(0, 80)}`);
         }
 
-        // Upload PDF to Supabase Storage
-        const safeFilename = `${messageId}_${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-        const fileUrl = await uploadPdf(safeFilename, pdfBuffer);
+        // Upload PDF to storage (non-fatal — pdfBuffer is still used for Gemini extraction)
+        let fileUrl = null;
+        try {
+          const safeFilename = `${messageId}_${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+          fileUrl = await uploadPdf(safeFilename, pdfBuffer);
+        } catch (uploadErr) {
+          console.log(`  [Attach] Storage upload failed for "${filename}" (non-fatal): ${uploadErr.message.slice(0, 120)}`);
+        }
 
         // Flag image-based PDFs (scanned slides OR parse failure — Gemini reads them natively)
         const isImageBased = extractedText.length < 300;
