@@ -13,6 +13,53 @@ router.post('/debug-trigger', (req, res) => {
   runEmailSync().catch((err) => console.error('debug-trigger error:', err));
 });
 
+// GET /api/gmail/debug-unprocessed — scan Gmail and show which message IDs are unprocessed (temporary)
+router.get('/debug-unprocessed', async (req, res) => {
+  try {
+    const { google } = require('googleapis');
+    const auth = await getAuthenticatedClient();
+    const gmail = google.gmail({ version: 'v1', auth });
+    const query = '-is:sent -is:draft -in:trash';
+    const allIds = [];
+    let pageToken;
+    do {
+      const listRes = await gmail.users.messages.list({ userId: 'me', q: query, maxResults: 100, ...(pageToken && { pageToken }) });
+      if (listRes.data.messages) allIds.push(...listRes.data.messages);
+      pageToken = listRes.data.nextPageToken;
+    } while (pageToken && allIds.length < 600);
+
+    const unprocessed = [];
+    const processedByStatus = {};
+    for (const { id } of allIds) {
+      const { rows } = await pool.query('SELECT status, deal_id FROM processed_emails WHERE message_id = $1', [id]);
+      if (!rows[0]) {
+        unprocessed.push(id);
+      } else {
+        processedByStatus[rows[0].status] = (processedByStatus[rows[0].status] || 0) + 1;
+      }
+    }
+    // For unprocessed IDs, get their subjects
+    const unprocessedDetails = [];
+    for (const id of unprocessed.slice(0, 30)) {
+      try {
+        const msg = await gmail.users.messages.get({ userId: 'me', id, format: 'metadata', metadataHeaders: ['Subject', 'From', 'Date'] });
+        const headers = msg.data.payload.headers;
+        unprocessedDetails.push({
+          id,
+          subject: headers.find(h => h.name === 'Subject')?.value || '',
+          from: headers.find(h => h.name === 'From')?.value || '',
+          date: headers.find(h => h.name === 'Date')?.value || '',
+        });
+      } catch (err) {
+        unprocessedDetails.push({ id, error: err.message });
+      }
+    }
+    res.json({ totalInGmail: allIds.length, unprocessedCount: unprocessed.length, processedByStatus, unprocessedEmails: unprocessedDetails });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
 // POST /api/gmail/debug-clear-messages — clear specific processed_emails entries (temporary)
 router.post('/debug-clear-messages', async (req, res) => {
   const { messageIds } = req.body;
