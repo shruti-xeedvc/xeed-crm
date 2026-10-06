@@ -30,7 +30,16 @@ router.get('/debug-recent', async (req, res) => {
        WHERE d.date_added >= NOW() - INTERVAL '14 days'
        ORDER BY d.date_added DESC LIMIT 60`
     );
-    res.json({ skippedEmails: skipped, recentDeals });
+    // Also check processed_emails status for known Oct 1 batch message IDs (1a0f5b prefix)
+    const { rows: oct1status } = await pool.query(
+      `SELECT pe.message_id, pe.subject, pe.status, pe.processed_at, d.company_name, d.description
+       FROM processed_emails pe
+       LEFT JOIN deals d ON d.id = pe.deal_id
+       WHERE pe.message_id LIKE '1a0f5b%'
+       ORDER BY pe.processed_at DESC LIMIT 80`
+    );
+    const { rows: totalCount } = await pool.query('SELECT COUNT(*) AS total FROM deals');
+    res.json({ totalDeals: totalCount[0].total, skippedEmails: skipped, recentDeals, oct1BatchStatus: oct1status });
   } catch (err) {
     res.json({ error: err.message });
   }
