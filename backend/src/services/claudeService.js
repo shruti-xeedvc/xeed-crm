@@ -107,7 +107,7 @@ Only return valid JSON. No markdown, no explanation.`;
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-flash-latest',
+    model: 'gemini-1.5-flash',
     generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
   });
 
@@ -150,7 +150,7 @@ const extractDealFromImages = async (subject, from, images) => {
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-flash-latest',
+    model: 'gemini-1.5-flash',
     generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
   });
 
@@ -220,7 +220,7 @@ const extractDealFromPdf = async (subject, from, pdfBuffer) => {
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-flash-latest',
+    model: 'gemini-1.5-flash',
     generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
   });
 

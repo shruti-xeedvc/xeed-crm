@@ -263,7 +263,7 @@ router.get('/debug-test-extraction', async (req, res) => {
         const { GoogleGenerativeAI } = require('@google/generative-ai');
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({
-          model: 'gemini-flash-latest',
+          model: 'gemini-1.5-flash',
           generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
         });
         const pdfBuffer = allPdfs[0].pdfBuffer;
