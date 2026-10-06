@@ -13,6 +13,29 @@ router.post('/debug-trigger', (req, res) => {
   runEmailSync().catch((err) => console.error('debug-trigger error:', err));
 });
 
+// GET /api/gmail/debug-recent — show skipped email subjects + deals added in last 14 days (temporary)
+router.get('/debug-recent', async (req, res) => {
+  try {
+    const { rows: skipped } = await pool.query(
+      `SELECT pe.message_id, pe.subject, pe.processed_at
+       FROM processed_emails pe
+       WHERE pe.status = 'skipped'
+       ORDER BY pe.processed_at DESC LIMIT 60`
+    );
+    const { rows: recentDeals } = await pool.query(
+      `SELECT d.id, d.company_name, d.description, d.sector, d.funding_ask, d.date_added,
+              d.notes, pe.message_id
+       FROM deals d
+       LEFT JOIN processed_emails pe ON pe.deal_id = d.id
+       WHERE d.date_added >= NOW() - INTERVAL '14 days'
+       ORDER BY d.date_added DESC LIMIT 60`
+    );
+    res.json({ skippedEmails: skipped, recentDeals });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
 // GET /api/gmail/debug-unprocessed — scan Gmail and show which message IDs are unprocessed (temporary)
 router.get('/debug-unprocessed', async (req, res) => {
   try {
