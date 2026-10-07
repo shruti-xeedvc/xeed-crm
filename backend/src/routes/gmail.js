@@ -143,6 +143,9 @@ router.post('/retry-stubs', async (req, res) => {
     const auth = await getAuthenticatedClient();
     const gmail = google.gmail({ version: 'v1', auth });
 
+    // ?limit=N caps how many stubs to process in one run (default 15 to stay under free-tier quota)
+    const limit = parseInt(req.query.limit, 10) || 15;
+
     // Find stub deals that came from a Gmail message
     const { rows: stubs } = await pool.query(
       `SELECT d.id, d.company_name, d.email_source_id
@@ -150,10 +153,12 @@ router.post('/retry-stubs', async (req, res) => {
        WHERE d.notes LIKE '%requires manual review%'
          AND d.email_source_id IS NOT NULL
          AND d.description IS NULL
-       ORDER BY d.date_added DESC`
+       ORDER BY d.date_added ASC
+       LIMIT $1`,
+      [limit]
     );
 
-    res.json({ message: `Re-extracting ${stubs.length} stubs — running in background`, count: stubs.length });
+    res.json({ message: `Re-extracting ${stubs.length} stubs (limit=${limit}) — running in background`, count: stubs.length, remaining: 'run again tomorrow for more' });
 
     // Run async — don't block the HTTP response
     (async () => {
@@ -292,17 +297,21 @@ router.get('/debug-test-extraction', async (req, res) => {
   }
 });
 
-// GET /api/gmail/debug-gemini-models — list available Gemini models
+// GET /api/gmail/debug-gemini-models — list available Gemini models via REST
 router.get('/debug-gemini-models', async (req, res) => {
   try {
-    const { GoogleGenerativeAI } = require('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const models = [];
-    for await (const model of genAI.listModels()) {
-      if (model.supportedGenerationMethods?.includes('generateContent')) {
-        models.push({ name: model.name, displayName: model.displayName, inputTokenLimit: model.inputTokenLimit });
-      }
-    }
+    const https = require('https');
+    const apiKey = process.env.GEMINI_API_KEY;
+    const data = await new Promise((resolve, reject) => {
+      https.get(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`, (r) => {
+        let body = '';
+        r.on('data', (c) => { body += c; });
+        r.on('end', () => resolve(JSON.parse(body)));
+      }).on('error', reject);
+    });
+    const models = (data.models || [])
+      .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+      .map(m => ({ name: m.name, displayName: m.displayName, inputTokenLimit: m.inputTokenLimit }));
     res.json({ count: models.length, models });
   } catch (err) {
     res.json({ error: err.message });
