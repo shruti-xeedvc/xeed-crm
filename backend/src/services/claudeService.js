@@ -5,9 +5,9 @@ const path = require('path');
 const os = require('os');
 
 // PDFs larger than this are uploaded via the File API instead of sent inline.
-// Image-based PDFs (all pages are scanned images) must be kept small for inline use
-// — above 1 MB they reliably cause 503 "high demand" errors when sent as base64.
-const INLINE_PDF_LIMIT = 1 * 1024 * 1024; // 1 MB
+// gemini-flash-lite-latest handles large PDFs inline without 503s (unlike gemini-3.8-flash),
+// so we keep a generous 20 MB threshold to use inline for all typical pitch decks.
+const INLINE_PDF_LIMIT = 20 * 1024 * 1024; // 20 MB
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
